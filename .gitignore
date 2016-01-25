@@ -1,0 +1,8 @@
+dbconfig.py
+
+
+*.pyc
+
+
+/nhl-data/*
+/data-for-db/*
