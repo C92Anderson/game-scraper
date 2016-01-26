@@ -40,6 +40,16 @@ cursor = connection.cursor()
 inDir = "nhl-data/" + str(seasonArg) + "/"
 outDir = "data-for-db/" + str(seasonArg) + "/"
 
+scoreSits = [-3, -2, -1, 0, 1, 2, 3]
+strengthSits = ["awayGoaliePulled", "homeGoaliePulled", "away2PP", "home2PP", "awayPP", "homePP", "ev3", "ev4", "ev5"]
+statNames = ["toi", "ig", "is", "im", "ib", "ia1", "ia2", "gf", "ga", "sf", "sa", "mf", "ma", "bf", "ba"]
+# ig/is/im/ib 	individual goals, shots, missed shots, blocked shots
+# ia1/ia2 		individual primary assists, secondary assits
+# gf/ga 		goals for, against
+# sf/sa 		shots on goal for, against
+# mf/ma 		missed shots for, against
+# bf/ba 		blocked shots for, against
+
 #
 #
 # Scrape data for each game
@@ -398,9 +408,9 @@ for gameId in gameIds:
 		if events[eventId]["type"] == "goal":
 			if (events[eventId]["period"] <= 4 and events[eventId]["gameId"] < 30000) or events[eventId]["gameId"] >= 30000:
 				if events[eventId]["team"] == teams["away"]:
-					awayScore = awayScore + 1
+					awayScore += 1
 				elif events[eventId]["team"] == teams["home"]:
-					homeScore = homeScore + 1
+					homeScore += 1
 
 		#
 		#
@@ -468,6 +478,11 @@ for gameId in gameIds:
 		
 	print "Processing " + str(filenames)
 
+	# Prepare the shift output file
+	outFile = open(outDir + str(gameId) + "-shifts.csv", "w")
+	outString = "season,date,gameId,playerId,team,period,start,end\n"
+	outFile.write(outString)
+
 	# Load each shift html file and parse it
 	for i, f in enumerate(filenames):
 
@@ -497,17 +512,20 @@ for gameId in gameIds:
 				firstTdClasses = r.find("td").get("class")
 				if firstTdClasses is not None:
 					if "playerHeading" in firstTdClasses:
+
 						# Convert jersey numbers into playerIds
-						player = r.find("td").text
-						player = player[0:player.find(" ")]
-						pos = players[team][int(player)]["position"]
-						player = players[team][int(player)]["playerId"]
-						shifts[team][player] = dict()
-						shifts[team][player]["position"] = pos
+						# Also store the player name, number, position
+						number = r.find("td").text
+						number = number[0:number.find(" ")]
+						playerId = players[team][int(number)]["playerId"]
+						shifts[team][playerId] = dict()
+						shifts[team][playerId]["position"] = players[team][int(number)]["position"]
+						shifts[team][playerId]["number"] = int(number)
+						shifts[team][playerId]["name"] = players[team][int(number)]["name"]
 
 						# Create a list for each period - each list will contain pairs of shifts times: [start, end]
 						for pr in range(1, len(periodDurations) + 1):
-							shifts[team][player][pr] = []
+							shifts[team][playerId][pr] = []
 			else:
 				if ("oddColor" in trClasses) or ("evenColor" in trClasses):
 					if len(r.find_all("td")) > 0: # Ignore empty rows
@@ -541,7 +559,14 @@ for gameId in gameIds:
 							endSec = int(end[end.find(":")+1:]) + 60 * endMin
 							
 							# Record shift data
-							shifts[team][player][period].append([startSec, endSec])
+							shifts[team][playerId][period].append([startSec, endSec])
+
+							# Write the shift data to the output file
+							outString = str(seasonArg) + "," + str(date) + "," + str(gameId) + ","
+							outString += str(playerId) + "," + teams[team] + "," + str(period) + "," + str(startSec) + "," + str(endSec)
+							outString += "\n"
+							outFile.write(outString)
+	outFile.close()
 
 	#
 	#
@@ -550,35 +575,42 @@ for gameId in gameIds:
 	#
 
 	# Create a dictionary to store the TOI breakdown
-	# playerId -> strengthSit -> scoreSit
+	# playerStats[playerId][strengthSit][scoreSit]
+	# teamStats[away/home][strengthSit][scoreSit]
 	playerStats = dict()
-	scoreSits = [-3, -2, -1, 0, 1, 2, 3]
-	strengthSits = ["awayGoaliePulled", "homeGoaliePulled", "away2PP", "home2PP", "awayPP", "homePP", "ev3", "ev4", "ev5"]
+	teamStats = dict()
+	teamStats["away"] = dict()
+	teamStats["home"] = dict()
 
+	# Initialize team stats dictionary
+	for team in teamStats:
+		for strengthSit in strengthSits:
+			teamStats[team][strengthSit] = dict()
+			for scoreSit in scoreSits:
+				teamStats[team][strengthSit][scoreSit] = dict()
+				# Initialize counters for stats
+				for st in statNames:
+					teamStats[team][strengthSit][scoreSit][st] = 0
+
+	# Initialize player stats dictionary
 	for team in shifts:	
 		for player in shifts[team]:
 			playerStats[player] = dict()
+
+			# Record player properties for easier access
+			playerStats[player]["team"] = teams[team]
+			playerStats[player]["position"] = shifts[team][player]["position"]
+			playerStats[player]["number"] = shifts[team][player]["number"]
+			playerStats[player]["name"] = shifts[team][player]["name"]
+
 			for strengthSit in strengthSits:
 				playerStats[player][strengthSit] = dict()
 				for scoreSit in scoreSits:
 					playerStats[player][strengthSit][scoreSit] = dict()
 
 					# Initialize counters for stats
-					playerStats[player][strengthSit][scoreSit]["toi"] = 0
-					playerStats[player][strengthSit][scoreSit]["ig"] = 0	# individual goals
-					playerStats[player][strengthSit][scoreSit]["is"] = 0	# individual shots on goal
-					playerStats[player][strengthSit][scoreSit]["im"] = 0	# individual missed shots
-					playerStats[player][strengthSit][scoreSit]["ib"] = 0	# individual blocked shots
-					playerStats[player][strengthSit][scoreSit]["ia1"] = 0	# individual primary assists
-					playerStats[player][strengthSit][scoreSit]["ia2"] = 0	# individual secondary assists
-					playerStats[player][strengthSit][scoreSit]["gf"] = 0	# goals for
-					playerStats[player][strengthSit][scoreSit]["ga"] = 0	# goals against
-					playerStats[player][strengthSit][scoreSit]["sf"] = 0	# shots on goal for
-					playerStats[player][strengthSit][scoreSit]["sa"] = 0	# shots on goal against
-					playerStats[player][strengthSit][scoreSit]["mf"] = 0	# missed shots for
-					playerStats[player][strengthSit][scoreSit]["ma"] = 0	# mised shots against
-					playerStats[player][strengthSit][scoreSit]["bf"] = 0	# blocked shots for
-					playerStats[player][strengthSit][scoreSit]["ba"] = 0	# blocked shots against
+					for st in statNames:
+						playerStats[player][strengthSit][scoreSit][st] = 0
 
 	# Exclude shootouts in the regular season
 	endPr = 3
@@ -626,9 +658,9 @@ for gameId in gameIds:
 		for g in goals:
 			for t in range(g["time"], periodDurations[pr]):
 				if g["team"] == teams["home"]:
-					flatScoreSitTimes[t] = flatScoreSitTimes[t] + 1
+					flatScoreSitTimes[t] += 1
 				elif g["team"] == teams["away"]:
-					flatScoreSitTimes[t] = flatScoreSitTimes[t] - 1
+					flatScoreSitTimes[t] -= 1
 		
 		# Limit the score situation to between -3 and +3 (inclusive)
 		flatScoreSitTimes = [max(-3, min(3, t)) for t in flatScoreSitTimes]
@@ -684,7 +716,26 @@ for gameId in gameIds:
 				# Record the TOIs
 				for strengthSit in strengthSits:
 					for scoreSit in scoreSits:
-						playerStats[player][strengthSit][scoreSit]["toi"] = playerStats[player][strengthSit][scoreSit]["toi"] + len(set.intersection(strengthSitTimes[strengthSit], scoreSitTimes[scoreSit], shiftTimes))
+
+						# Since the score differential is calculated as home-away, invert the score differential for the away team
+						adjScoreSit = scoreSit
+						if team == "away":
+							adjScoreSit = -1 * scoreSit
+
+						playerStats[player][strengthSit][scoreSit]["toi"] += len(set.intersection(strengthSitTimes[strengthSit], scoreSitTimes[scoreSit], shiftTimes))
+
+		# To get each teams's TOI broken down by score situation and strength situation,
+		# get the intersection each score situation and strength situation
+		for team in teamStats:
+			for strengthSit in strengthSits:
+				for scoreSit in scoreSits:
+
+					# Since the score differential is calculated as home-away, invert the score differential for the away team
+					adjScoreSit = scoreSit
+					if team == "away":
+						adjScoreSit = -1 * scoreSit
+			
+					teamStats[team][strengthSit][scoreSit]["toi"] += len(set.intersection(strengthSitTimes[strengthSit], scoreSitTimes[scoreSit]))
 
 	#
 	#
@@ -694,12 +745,188 @@ for gameId in gameIds:
 
 	# We're only keeping track of stats for goals, assists, and corsis
 	filteredEvents = [events[ev] for ev in events if events[ev]["type"] in ["goal", "shot", "block", "miss"]]
-	pprint(filteredEvents)
-	# pprint(playerStats)
+	for event in filteredEvents:
 
+		# Get the strength situation for the event
+		# Logic should be consistent with how shifts' strength situation is determined
+		eventStrSit = ""
+		if "awayG" not in event:
+			eventStrSit = "awayGoaliePulled"
+		elif "homeG" not in event:
+			eventStrSit = "homeGoaliePulled"
+		else:
+			aSkaters = event["awaySkaters"]
+			hSkaters = event["homeSkaters"]
+			if aSkaters - hSkaters == 2:
+				eventStrSit = "away2PP"
+			elif aSkaters - hSkaters == 1:
+				eventStrSit = "awayPP"
+			elif aSkaters - hSkaters == -1:
+				eventStrSit = "homePP"
+			elif aSkaters - hSkaters == -2:
+				eventStrSit = "home2PP"
+			elif aSkaters == hSkaters:
+				if aSkaters == 5:
+					eventStrSit = "ev5"
+				elif aSkaters == 4:
+					eventStrSit = "ev4"
+				elif aSkaters == 3:
+					eventStrSit = "ev3"
 
+		# Get the score situation for the event, limited to -3 to +3
+		eventScoreSit = max(-3, min(3, event["homeScore"] - event["awayScore"]))
+		
+		# Since the score differential is calculated as home-away, invert the score differential for the away team
+		if event["team"] == teams["away"]:
+			eventScoreSit = -1 * eventScoreSit
 
+		stat = ""
+		if event["type"] == "goal":
+			stat = "g"
+		elif event["type"] == "shot":
+			stat = "s"
+		elif event["type"] == "miss":
+			stat = "m"
+		elif event["type"] == "block":
+			stat = "b"
 
+		# Record corsis for on-ice players
+		aSuffix = ""
+		hSuffix = ""
+		if event["team"] == teams["away"]:
+			aSuffix = "f"
+			hSuffix = "a"
+		elif event["team"] == teams["home"]:
+			aSuffix = "a"
+			hSuffix = "f"
 
+		# Increment stat for on-ice skaters
+		for idx in range(1, 7):
+			# Increment stat for away skaters
+			aKey = "awayS" + str(idx)
+			if aKey in event:
+				playerStats[event[aKey]][eventStrSit][eventScoreSit][stat + aSuffix] += 1
+			# Increment stat for home skaters
+			hKey = "homeS" + str(idx)
+			if hKey in event:
+				playerStats[event[hKey]][eventStrSit][eventScoreSit][stat + hSuffix] += 1
 
+		# Increment stats for on-ice goalies
+		if "awayG" in event:
+			playerStats[event["awayG"]][eventStrSit][eventScoreSit][stat + aSuffix] += 1
+		if "homeG" in event:
+			playerStats[event["homeG"]][eventStrSit][eventScoreSit][stat + hSuffix] += 1
 
+		# Record individual corsis
+		playerStats[event["p1"]][eventStrSit][eventScoreSit]["i" + stat] += 1
+
+		# Record assists
+		if event["type"] == "goal":
+			if "p2" in event and event["p2"] != "NULL":
+				playerStats[event["p2"]][eventStrSit][eventScoreSit]["ia1"] += 1
+			if "p3" in event and event["p3"] != "NULL":
+				playerStats[event["p3"]][eventStrSit][eventScoreSit]["ia2"] += 1
+
+		# Record team stats
+		teamStats["away"][eventStrSit][eventScoreSit][stat + aSuffix] += 1
+		teamStats["home"][eventStrSit][eventScoreSit][stat + hSuffix] += 1
+
+	#
+	#
+	# Output results
+	# Dictionary structures:
+	# players[team][jersey][playerId/name/position]
+	# playerStats[playerId][strength situation][score situation][stat name]
+	#
+	#
+
+	#
+	# Output team stats
+	#
+
+	excludeCols = ["ig", "is", "im", "ib", "ia1", "ia2"] # Exclude these stats because they only apply to individual players
+	outFile = open(outDir + str(gameId) + "-team-stats.csv", "w")
+	outString = "season,date,gameId,team,venue,strSit,scoreSit"
+	for st in statNames:
+		if st not in excludeCols:
+			outString += "," + st
+	outString += "\n"
+	outFile.write(outString)
+
+	for team in teamStats:
+		for strSit in teamStats[team]:
+			if strSit in strengthSits:
+				for scoreSit in teamStats[team][strSit]:
+					outString = str(seasonArg) + "," + str(date) + "," + str(gameId) + "," + teams[team] + "," + team + ","
+					outString += strSit + "," + str(scoreSit)
+					for st in statNames:
+						if st not in excludeCols:
+							outString += "," + str(teamStats[team][strSit][scoreSit][st])
+					outString += "\n"
+					outFile.write(outString)
+	outFile.close()
+
+	#
+	# Output player stats
+	#
+
+	outFile = open(outDir + str(gameId) + "-player-stats.csv", "w")
+	outString = "season,date,gameId,team,playerId,strSit,scoreSit"
+	for st in statNames:
+		outString += "," + st
+	outString += "\n"
+	outFile.write(outString)
+
+	for player in playerStats:
+		for strSit in playerStats[player]:
+			if strSit in strengthSits:
+				for scoreSit in playerStats[player][strSit]:
+					outString = str(seasonArg) + "," + str(date) + "," + str(gameId) + ","
+					outString += playerStats[player]["team"] + "," + str(player) + ","
+					outString += strSit + "," + str(scoreSit)
+					for st in statNames:
+						outString += "," + str(playerStats[player][strSit][scoreSit][st])
+					outString += "\n"
+					outFile.write(outString)
+	outFile.close()
+
+	#
+	# Output events
+	#
+
+	columns = ["period", "time", "desc", "type", "subtype", "team", "p1", "p2", "p3", "awayScore", "homeScore", "awaySkaters", "homeSkaters", "awayS1", "awayS2", "awayS3", "awayS4", "awayS5", "awayS6", "awayG", "homeS1", "homeS2", "homeS3", "homeS4", "homeS5", "homeS6", "homeG"]
+	outFile = open(outDir + str(gameId) + "-events.csv", "w")
+	outString = "season,date,gameId,eventId"
+	for cl in columns:
+		outString += "," + cl
+	outString += "\n"
+	outFile.write(outString)
+	for eid in events:
+		outString = str(seasonArg) + "," + str(date) + "," + str(gameId) + "," + str(eid)
+		for cl in columns:
+			if cl not in events[eid]: # Handle cases where a key doesn't exist - e.g., if the raw PBP file didn't have any on-ice skaters for an event (like 'gend'), the 'homeS1' etc. keys won't exist
+				outString += ",NULL"
+			elif events[eid][cl] == "": # Replace blank values with NULL
+				outString += ",NULL"
+			else:
+				outString += "," + str(events[eid][cl])
+		outString += "\n"
+		outFile.write(outString)
+	outFile.close()
+
+	#
+	# Output players
+	#
+	
+	outFile = open(outDir + str(gameId) + "-players.csv", "w")
+	outString = "season,date,gameId,team,venue,playerId,jersey,position,name\n"
+	outFile.write(outString)
+
+	for tm in players:
+		for jersey in players[tm]:
+			outString = str(seasonArg) + "," + str(date) + "," + str(gameId) + "," + teams[tm] + "," + tm + ","
+			outString += str(players[tm][jersey]["playerId"]) + "," + str(jersey) + "," + players[tm][jersey]["position"] + "," + players[tm][jersey]["name"]
+			outString += "\n"
+			outFile.write(outString)
+
+	outFile.close()
