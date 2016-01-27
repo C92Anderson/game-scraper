@@ -41,7 +41,7 @@ inDir = "nhl-data/" + str(seasonArg) + "/"
 outDir = "data-for-db/" + str(seasonArg) + "/"
 
 scoreSits = [-3, -2, -1, 0, 1, 2, 3]
-strengthSits = ["awayGoaliePulled", "homeGoaliePulled", "away2PP", "home2PP", "awayPP", "homePP", "ev3", "ev4", "ev5"]
+strengthSits = ["awayGoaliePulled", "homeGoaliePulled", "awayPP", "homePP", "ev3", "ev4", "ev5"]
 statNames = ["toi", "ig", "is", "im", "ib", "ia1", "ia2", "gf", "ga", "sf", "sa", "mf", "ma", "bf", "ba"]
 # ig/is/im/ib 	individual goals, shots, missed shots, blocked shots
 # ia1/ia2 		individual primary assists, secondary assits
@@ -686,14 +686,10 @@ for gameId in gameIds:
 				strengthSitTimes["awayGoaliePulled"].add(t)
 			elif gOnIce["home"][t] == 0:
 				strengthSitTimes["homeGoaliePulled"].add(t)
-			elif aPlayers - hPlayers == 2:
-				strengthSitTimes["away2PP"].add(t)
-			elif aPlayers - hPlayers == 1:
+			elif aPlayers - hPlayers > 0:
 				strengthSitTimes["awayPP"].add(t)
-			elif aPlayers - hPlayers == -1:
+			elif aPlayers - hPlayers < 0:
 				strengthSitTimes["homePP"].add(t)
-			elif aPlayers - hPlayers == -2:
-				strengthSitTimes["home2PP"].add(t)
 			elif aPlayers == hPlayers:
 				if aPlayers == 6:
 					strengthSitTimes["ev5"].add(t)
@@ -757,14 +753,10 @@ for gameId in gameIds:
 		else:
 			aSkaters = event["awaySkaters"]
 			hSkaters = event["homeSkaters"]
-			if aSkaters - hSkaters == 2:
-				eventStrSit = "away2PP"
-			elif aSkaters - hSkaters == 1:
+			if aSkaters - hSkaters > 0:
 				eventStrSit = "awayPP"
-			elif aSkaters - hSkaters == -1:
+			elif aSkaters - hSkaters < 0:
 				eventStrSit = "homePP"
-			elif aSkaters - hSkaters == -2:
-				eventStrSit = "home2PP"
 			elif aSkaters == hSkaters:
 				if aSkaters == 5:
 					eventStrSit = "ev5"
@@ -801,21 +793,30 @@ for gameId in gameIds:
 			hSuffix = "f"
 
 		# Increment stat for on-ice skaters
+		# For goals, also increment shots
 		for idx in range(1, 7):
 			# Increment stat for away skaters
 			aKey = "awayS" + str(idx)
 			if aKey in event:
 				playerStats[event[aKey]][eventStrSit][eventScoreSit][stat + aSuffix] += 1
+				if stat == "g":
+					playerStats[event[aKey]][eventStrSit][eventScoreSit]["s" + aSuffix] += 1
 			# Increment stat for home skaters
 			hKey = "homeS" + str(idx)
 			if hKey in event:
 				playerStats[event[hKey]][eventStrSit][eventScoreSit][stat + hSuffix] += 1
+				if stat == "g":
+					playerStats[event[hKey]][eventStrSit][eventScoreSit]["s" + hSuffix] += 1
 
 		# Increment stats for on-ice goalies
 		if "awayG" in event:
 			playerStats[event["awayG"]][eventStrSit][eventScoreSit][stat + aSuffix] += 1
+			if stat == "g":
+				playerStats[event["awayG"]][eventStrSit][eventScoreSit]["s" + aSuffix] += 1
 		if "homeG" in event:
 			playerStats[event["homeG"]][eventStrSit][eventScoreSit][stat + hSuffix] += 1
+			if stat == "g":
+				playerStats[event["homeG"]][eventStrSit][eventScoreSit]["s" + hSuffix] += 1
 
 		# Record individual corsis
 		playerStats[event["p1"]][eventStrSit][eventScoreSit]["i" + stat] += 1
@@ -830,6 +831,9 @@ for gameId in gameIds:
 		# Record team stats
 		teamStats["away"][eventStrSit][eventScoreSit][stat + aSuffix] += 1
 		teamStats["home"][eventStrSit][eventScoreSit][stat + hSuffix] += 1
+		if stat == "g":
+			teamStats["away"][eventStrSit][eventScoreSit]["s" + aSuffix] += 1
+			teamStats["home"][eventStrSit][eventScoreSit]["s" + hSuffix] += 1
 
 	#
 	#
