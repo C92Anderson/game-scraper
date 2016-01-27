@@ -714,11 +714,11 @@ for gameId in gameIds:
 					for scoreSit in scoreSits:
 
 						# Since the score differential is calculated as home-away, invert the score differential for the away team
-						adjScoreSit = scoreSit
+						outputScoreSit = scoreSit
 						if team == "away":
-							adjScoreSit = -1 * scoreSit
+							outputScoreSit = -1 * scoreSit
 
-						playerStats[player][strengthSit][scoreSit]["toi"] += len(set.intersection(strengthSitTimes[strengthSit], scoreSitTimes[scoreSit], shiftTimes))
+						playerStats[player][strengthSit][outputScoreSit]["toi"] += len(set.intersection(strengthSitTimes[strengthSit], scoreSitTimes[scoreSit], shiftTimes))
 
 		# To get each teams's TOI broken down by score situation and strength situation,
 		# get the intersection each score situation and strength situation
@@ -727,11 +727,11 @@ for gameId in gameIds:
 				for scoreSit in scoreSits:
 
 					# Since the score differential is calculated as home-away, invert the score differential for the away team
-					adjScoreSit = scoreSit
+					outputScoreSit = scoreSit
 					if team == "away":
-						adjScoreSit = -1 * scoreSit
+						outputScoreSit = -1 * scoreSit
 			
-					teamStats[team][strengthSit][scoreSit]["toi"] += len(set.intersection(strengthSitTimes[strengthSit], scoreSitTimes[scoreSit]))
+					teamStats[team][strengthSit][outputScoreSit]["toi"] += len(set.intersection(strengthSitTimes[strengthSit], scoreSitTimes[scoreSit]))
 
 	#
 	#
@@ -766,11 +766,8 @@ for gameId in gameIds:
 					eventStrSit = "ev3"
 
 		# Get the score situation for the event, limited to -3 to +3
-		eventScoreSit = max(-3, min(3, event["homeScore"] - event["awayScore"]))
-		
-		# Since the score differential is calculated as home-away, invert the score differential for the away team
-		if event["team"] == teams["away"]:
-			eventScoreSit = -1 * eventScoreSit
+		hScoreSit = max(-3, min(3, event["homeScore"] - event["awayScore"]))
+		aScoreSit = -1 * hScoreSit
 
 		stat = ""
 		if event["type"] == "goal":
@@ -798,42 +795,50 @@ for gameId in gameIds:
 			# Increment stat for away skaters
 			aKey = "awayS" + str(idx)
 			if aKey in event:
-				playerStats[event[aKey]][eventStrSit][eventScoreSit][stat + aSuffix] += 1
+				playerStats[event[aKey]][eventStrSit][aScoreSit][stat + aSuffix] += 1
 				if stat == "g":
-					playerStats[event[aKey]][eventStrSit][eventScoreSit]["s" + aSuffix] += 1
+					playerStats[event[aKey]][eventStrSit][aScoreSit]["s" + aSuffix] += 1
 			# Increment stat for home skaters
 			hKey = "homeS" + str(idx)
 			if hKey in event:
-				playerStats[event[hKey]][eventStrSit][eventScoreSit][stat + hSuffix] += 1
+				playerStats[event[hKey]][eventStrSit][hScoreSit][stat + hSuffix] += 1
 				if stat == "g":
-					playerStats[event[hKey]][eventStrSit][eventScoreSit]["s" + hSuffix] += 1
+					playerStats[event[hKey]][eventStrSit][hScoreSit]["s" + hSuffix] += 1
 
 		# Increment stats for on-ice goalies
 		if "awayG" in event:
-			playerStats[event["awayG"]][eventStrSit][eventScoreSit][stat + aSuffix] += 1
+			playerStats[event["awayG"]][eventStrSit][aScoreSit][stat + aSuffix] += 1
 			if stat == "g":
-				playerStats[event["awayG"]][eventStrSit][eventScoreSit]["s" + aSuffix] += 1
+				playerStats[event["awayG"]][eventStrSit][aScoreSit]["s" + aSuffix] += 1
 		if "homeG" in event:
-			playerStats[event["homeG"]][eventStrSit][eventScoreSit][stat + hSuffix] += 1
+			playerStats[event["homeG"]][eventStrSit][hScoreSit][stat + hSuffix] += 1
 			if stat == "g":
-				playerStats[event["homeG"]][eventStrSit][eventScoreSit]["s" + hSuffix] += 1
+				playerStats[event["homeG"]][eventStrSit][hScoreSit]["s" + hSuffix] += 1
 
-		# Record individual corsis
-		playerStats[event["p1"]][eventStrSit][eventScoreSit]["i" + stat] += 1
+		# Record individual goals and corsis
+		iScoreSit = ""
+		if event["team"] == teams["away"]:
+			iScoreSit = aScoreSit
+		elif event["team"] == teams["home"]:
+			iScoreSit = hScoreSit
+
+		playerStats[event["p1"]][eventStrSit][iScoreSit]["i" + stat] += 1
+		if event["type"] == "goal":
+			playerStats[event["p1"]][eventStrSit][iScoreSit]["is"] += 1
 
 		# Record assists
 		if event["type"] == "goal":
 			if "p2" in event and event["p2"] != "NULL":
-				playerStats[event["p2"]][eventStrSit][eventScoreSit]["ia1"] += 1
+				playerStats[event["p2"]][eventStrSit][iScoreSit]["ia1"] += 1
 			if "p3" in event and event["p3"] != "NULL":
-				playerStats[event["p3"]][eventStrSit][eventScoreSit]["ia2"] += 1
+				playerStats[event["p3"]][eventStrSit][iScoreSit]["ia2"] += 1
 
 		# Record team stats
-		teamStats["away"][eventStrSit][eventScoreSit][stat + aSuffix] += 1
-		teamStats["home"][eventStrSit][eventScoreSit][stat + hSuffix] += 1
+		teamStats["away"][eventStrSit][aScoreSit][stat + aSuffix] += 1
+		teamStats["home"][eventStrSit][hScoreSit][stat + hSuffix] += 1
 		if stat == "g":
-			teamStats["away"][eventStrSit][eventScoreSit]["s" + aSuffix] += 1
-			teamStats["home"][eventStrSit][eventScoreSit]["s" + hSuffix] += 1
+			teamStats["away"][eventStrSit][aScoreSit]["s" + aSuffix] += 1
+			teamStats["home"][eventStrSit][hScoreSit]["s" + hSuffix] += 1
 
 	#
 	#
