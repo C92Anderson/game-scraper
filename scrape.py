@@ -7,6 +7,28 @@ import mysql.connector
 import re
 import dbconfig	# Database credentials
 
+def convertStrSit(team, strSit):
+	returnStrSit = strSit
+	if team == "away":
+		if strSit == "awayGoaliePulled":
+			returnStrSit = "ownGPulled"
+		elif strSit == "homeGoaliePulled":
+			returnStrSit = "oppGPulled"
+		elif strSit == "awayPP":
+			returnStrSit = "pp"
+		elif strSit == "homePP":
+			returnStrSit = "pk"
+	elif team == "home":
+		if strSit == "awayGoaliePulled":
+			returnStrSit = "oppGPulled"
+		elif strSit == "homeGoaliePulled":
+			returnStrSit = "ownGPulled"
+		elif strSit == "awayPP":
+			returnStrSit = "pk"
+		elif strSit == "homePP":
+			returnStrSit = "pp"
+	return returnStrSit
+
 #
 # 
 # Get arguments
@@ -170,9 +192,9 @@ for gameId in gameIds:
 
 	# Create dictionaries for the home and away players
 	# The keys will be the jersey numbers, so that when we process the PBP and shift files, we can translate the jersey numbers into playerIds
-	players = dict()
-	players["away"] = dict()
-	players["home"] = dict()
+	boxPlayers = dict()
+	boxPlayers["away"] = dict()
+	boxPlayers["home"] = dict()
 	
 	# Get all the stat tables - includes both teams' skaters and goalies
 	tables = soup.find_all("table", class_="stats")
@@ -194,27 +216,27 @@ for gameId in gameIds:
 			if i == 0 or i == 2:
 
 				jersey = int(r.find_all("td", colspan="1", rowspan="1")[0].text)
-				players[team][jersey] = dict()
+				boxPlayers[team][jersey] = dict()
 
-				players[team][jersey]["name"] = r.find_all("a", class_="undMe", rel="skaterLinkData")[0].text
-				players[team][jersey]["position"] = r.find_all("td", colspan="1", rowspan="1")[2].text.lower()
+				boxPlayers[team][jersey]["name"] = r.find_all("a", class_="undMe", rel="skaterLinkData")[0].text
+				boxPlayers[team][jersey]["position"] = r.find_all("td", colspan="1", rowspan="1")[2].text.lower()
 
 				href = r.find_all("a", class_="undMe", rel="skaterLinkData")[0]["href"]
-				players[team][jersey]["playerId"] = href[href.find("?id=")+4:]
+				boxPlayers[team][jersey]["playerId"] = href[href.find("?id=")+4:]
 
 			# The second table is the away goalies, fourth table is the home goalies
 			if i == 1 or i == 3:
 
 				jersey = int(r.find_all("td", colspan="1", rowspan="1")[0].text)
-				players[team][jersey] = dict()
+				boxPlayers[team][jersey] = dict()
 
-				players[team][jersey]["name"] = r.find_all("a", class_="undMe", rel="goalieLinkData")[0].text
-				players[team][jersey]["position"] = "g"
+				boxPlayers[team][jersey]["name"] = r.find_all("a", class_="undMe", rel="goalieLinkData")[0].text
+				boxPlayers[team][jersey]["position"] = "g"
 
 				href = r.find_all("a", class_="undMe", rel="goalieLinkData")[0]["href"]
-				players[team][jersey]["playerId"] = href[href.find("?id=")+4:]
+				boxPlayers[team][jersey]["playerId"] = href[href.find("?id=")+4:]
 
-	# Done looping through stats tables
+	# Done looping through boxscore stats tables
 
 	# 
 	#
@@ -305,7 +327,7 @@ for gameId in gameIds:
 			eventP1 = eventP2
 			eventP2 = tempP
 
-		# Convert jersey numbers into playerIds using the 'players' dictionary
+		# Convert jersey numbers into playerIds using the 'boxPlayers' dictionary
 		# Depending on the event type, we need to look up the jersey number in the home or away player dictionaries
 		if numPlayers >= 1:
 			# If only a single jersey number exists, the listed played usually belongs to the eventTeam
@@ -314,14 +336,14 @@ for gameId in gameIds:
 			#	See event #341 here: http://www.nhl.com/scores/htmlreports/20142015/PL020120.HTM
 			if events[eventId]["type"] == "penl" and events[eventId]["desc"].lower().find("player leaves bench") >= 0:
 				if events[eventId]["team"] == teams["away"]:
-					eventP1 = players["home"][eventP1]["playerId"]
+					eventP1 = boxPlayers["home"][eventP1]["playerId"]
 				elif events[eventId]["team"] == teams["home"]:
-					eventP1 = players["away"][eventP1]["playerId"]
+					eventP1 = boxPlayers["away"][eventP1]["playerId"]
 			else:
 				if events[eventId]["team"] == teams["away"]:
-					eventP1 = players["away"][eventP1]["playerId"]
+					eventP1 = boxPlayers["away"][eventP1]["playerId"]
 				elif events[eventId]["team"] == teams["home"]:
-					eventP1 = players["home"][eventP1]["playerId"]
+					eventP1 = boxPlayers["home"][eventP1]["playerId"]
 
 		if numPlayers >= 2:	
 			if (events[eventId]["type"] in ["fac", "hit", "block"]) or (events[eventId]["type"] == "penl" and events[eventId]["desc"].lower().find(" served by: ") < 0) or (events[eventId]["type"] == "penl" and events[eventId]["desc"].lower().find("too many men/ice") >= 0):
@@ -329,27 +351,27 @@ for gameId in gameIds:
 			# Don't use the opposite dictionary if the penalty description contains "served by" - in this case, the player in the box is on the same team as eventP1. 
 			# This case also includes "too many men" bench penalties because P1 is the serving player, P2 is the drawing player: "COL TEAM Too many men/ice - bench(2 min) Served By: #28 CAREY, Neu. Zone Drawn By: NSH #20 VOLCHENKOV"
 				if events[eventId]["team"] == teams["away"]:
-					eventP2 = players["home"][eventP2]["playerId"]
+					eventP2 = boxPlayers["home"][eventP2]["playerId"]
 				elif events[eventId]["team"] == teams["home"]:
-					eventP2 = players["away"][eventP2]["playerId"]
+					eventP2 = boxPlayers["away"][eventP2]["playerId"]
 			elif events[eventId]["type"] == "goal" or (events[eventId]["type"] == "penl" and events[eventId]["desc"].lower().find(" served by: ") >= 0): 
 				if events[eventId]["team"] == teams["away"]:
-					eventP2 = players["away"][eventP2]["playerId"]
+					eventP2 = boxPlayers["away"][eventP2]["playerId"]
 				elif events[eventId]["team"] == teams["home"]:
-					eventP2 = players["home"][eventP2]["playerId"]
+					eventP2 = boxPlayers["home"][eventP2]["playerId"]
 
 		if numPlayers == 3:
 			# 3 players are only listed in goals with 2 assists, and for penalties that were served by someone other than the committer
 			if events[eventId]["type"] == "goal":
 				if events[eventId]["team"] == teams["away"]:
-					eventP3 = players["away"][eventP3]["playerId"]
+					eventP3 = boxPlayers["away"][eventP3]["playerId"]
 				elif events[eventId]["team"] == teams["home"]:
-					eventP3 = players["home"][eventP3]["playerId"]
+					eventP3 = boxPlayers["home"][eventP3]["playerId"]
 			elif events[eventId]["type"] == "penl" and events[eventId]["desc"].lower().find(" served by: ") >= 0: 
 				if events[eventId]["team"] == teams["away"]:
-					eventP3 = players["home"][eventP3]["playerId"]
+					eventP3 = boxPlayers["home"][eventP3]["playerId"]
 				elif events[eventId]["team"] == teams["home"]:
-					eventP3 = players["away"][eventP3]["playerId"]
+					eventP3 = boxPlayers["away"][eventP3]["playerId"]
 
 		# Store the eventPlayerIds
  		events[eventId]["p1"] = eventP1
@@ -433,7 +455,7 @@ for gameId in gameIds:
 
 			for player in td.find_all(attrs={"style" : "cursor:hand;"}):
 				position = player["title"][0:player["title"].find(" - ")].lower()
-				playerId = players[onIceTeam][int(player.text)]["playerId"]
+				playerId = boxPlayers[onIceTeam][int(player.text)]["playerId"]
 				if position in ["right wing", "left wing", "center", "defense"]:
 					onIceSkaters.append(playerId)
 				elif position == "goalie":
@@ -517,11 +539,11 @@ for gameId in gameIds:
 						# Also store the player name, number, position
 						number = r.find("td").text
 						number = number[0:number.find(" ")]
-						playerId = players[team][int(number)]["playerId"]
+						playerId = boxPlayers[team][int(number)]["playerId"]
 						shifts[team][playerId] = dict()
-						shifts[team][playerId]["position"] = players[team][int(number)]["position"]
+						shifts[team][playerId]["position"] = boxPlayers[team][int(number)]["position"]
 						shifts[team][playerId]["number"] = int(number)
-						shifts[team][playerId]["name"] = players[team][int(number)]["name"]
+						shifts[team][playerId]["name"] = boxPlayers[team][int(number)]["name"]
 
 						# Create a list for each period - each list will contain pairs of shifts times: [start, end]
 						for pr in range(1, len(periodDurations) + 1):
@@ -614,7 +636,7 @@ for gameId in gameIds:
 
 	# Exclude shootouts in the regular season
 	endPr = 3
-	if gameId < 30000 and len(periodDurations) > 4:
+	if gameId < 30000 and len(periodDurations) >= 4:
 		endPr = 4
 	elif gameId >= 30000:
 		endPr = len(periodDurations)
@@ -740,7 +762,14 @@ for gameId in gameIds:
 	#
 
 	# We're only keeping track of stats for goals, assists, and corsis
-	filteredEvents = [events[ev] for ev in events if events[ev]["type"] in ["goal", "shot", "block", "miss"]]
+	# Exclude shootouts in the regular season
+	endPr = 3
+	if gameId < 30000 and len(periodDurations) >= 4:
+		endPr = 4
+	elif gameId >= 30000:
+		endPr = len(periodDurations)
+
+	filteredEvents = [events[ev] for ev in events if events[ev]["type"] in ["goal", "shot", "block", "miss"] and events[ev]["period"] <= endPr]
 	for event in filteredEvents:
 
 		# Get the strength situation for the event
@@ -844,7 +873,7 @@ for gameId in gameIds:
 	#
 	# Output results
 	# Dictionary structures:
-	# players[team][jersey][playerId/name/position]
+	# boxPlayers[team][jersey][playerId/name/position]
 	# playerStats[playerId][strength situation][score situation][stat name]
 	#
 	#
@@ -865,9 +894,10 @@ for gameId in gameIds:
 	for team in teamStats:
 		for strSit in teamStats[team]:
 			if strSit in strengthSits:
+				outStrSit = convertStrSit(team, strSit)
 				for scoreSit in teamStats[team][strSit]:
 					outString = str(seasonArg) + "," + str(date) + "," + str(gameId) + "," + teams[team] + "," + team + ","
-					outString += strSit + "," + str(scoreSit)
+					outString += outStrSit + "," + str(scoreSit)
 					for st in statNames:
 						if st not in excludeCols:
 							outString += "," + str(teamStats[team][strSit][scoreSit][st])
@@ -889,10 +919,11 @@ for gameId in gameIds:
 	for player in playerStats:
 		for strSit in playerStats[player]:
 			if strSit in strengthSits:
+				outStrSit = convertStrSit(team, strSit)
 				for scoreSit in playerStats[player][strSit]:
 					outString = str(seasonArg) + "," + str(date) + "," + str(gameId) + ","
 					outString += playerStats[player]["team"] + "," + str(player) + ","
-					outString += strSit + "," + str(scoreSit)
+					outString += outStrSit + "," + str(scoreSit)
 					for st in statNames:
 						outString += "," + str(playerStats[player][strSit][scoreSit][st])
 					outString += "\n"
@@ -931,10 +962,10 @@ for gameId in gameIds:
 	outString = "season,date,gameId,team,venue,playerId,jersey,position,name\n"
 	outFile.write(outString)
 
-	for tm in players:
-		for jersey in players[tm]:
+	for tm in boxPlayers:
+		for jersey in boxPlayers[tm]:
 			outString = str(seasonArg) + "," + str(date) + "," + str(gameId) + "," + teams[tm] + "," + tm + ","
-			outString += str(players[tm][jersey]["playerId"]) + "," + str(jersey) + "," + players[tm][jersey]["position"] + "," + players[tm][jersey]["name"]
+			outString += str(boxPlayers[tm][jersey]["playerId"]) + "," + str(jersey) + "," + boxPlayers[tm][jersey]["position"] + "," + boxPlayers[tm][jersey]["name"]
 			outString += "\n"
 			outFile.write(outString)
 
