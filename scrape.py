@@ -115,12 +115,23 @@ for gameId in gameIds:
 	#
 	#
 
-	els = soup.find_all("td", class_="heading + bborder", width="10%", align="center")
+	els = soup.find_all("td", {"class":"heading + bborder", "width":"10%", "align":"center"})
 	awayTeam = els[0].text.lower()
 	teams["away"] = awayTeam[0:awayTeam.find(" ")]
 	homeTeam = els[1].text.lower()
 	teams["home"] = homeTeam[0:homeTeam.find(" ")]
 	
+	#
+	#
+	# Store the final score (including OT/SO results)
+	#
+	#
+
+	#els = soup.find_all("td", {"style":"font-size: 40px;font-weight:bold", "align":"center"})
+	#finalScores = dict()
+	#finalScores["away"] = int(els[0].text)
+	#finalScores["home"] = int(els[1].text)
+
 	#
 	#
 	# Get the game date from the PBP html file, and store it as an int (20150123)
