@@ -7,6 +7,8 @@ import mysql.connector
 import re
 import dbconfig	# Database credentials
 
+# Translate strength situation for output
+# e.g., "awayGoaliePulled" gets translated to "ownGPulled" for the away team, and "oppGPulled" for the home team
 def convertStrSit(team, strSit):
 	returnStrSit = strSit
 	if team == "away":
@@ -28,6 +30,12 @@ def convertStrSit(team, strSit):
 		elif strSit == "homePP":
 			returnStrSit = "pp"
 	return returnStrSit
+
+# Take string "mm:ss" and return the number of seconds (as an integer)
+def toSecs(timeStr):
+	mm = int(timeStr[0:timeStr.find(":")])
+	ss = int(timeStr[timeStr.find(":")+1:])
+	return 60 * mm + ss
 
 #
 # 
@@ -97,8 +105,6 @@ for gameId in gameIds:
 	if os.path.isfile(inDir + filename) == False:
 		print "Downloading " + str(filename)
 		nhlUrl = "http://www.nhl.com/scores/htmlreports/" + str(seasonArg) + "/PL0" + str(gameId) + ".HTM"
-		user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.94 Safari/537.36"
-		headers = { "User-Agent" : user_agent }
 		savedFile = urllib.urlretrieve(nhlUrl, inDir + "PL0" + str(gameId) + ".HTM")
 		
 	print "Getting team abbreviations from " + str(filename)
@@ -189,8 +195,6 @@ for gameId in gameIds:
 	if os.path.isfile(inDir + filename) == False:
 		print "Downloading " + str(filename)
 		nhlUrl = "http://www.nhl.com/gamecenter/en/boxscore?id=" + boxscoreUrl
-		user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.94 Safari/537.36"
-		headers = { "User-Agent" : user_agent }
 		savedFileName = "Box0" + str(gameId) + ".html"
 		savedFile = urllib.urlretrieve(nhlUrl, inDir + savedFileName)
 		
@@ -287,9 +291,7 @@ for gameId in gameIds:
 		# Convert elapsed time to seconds
 		timeRange = r.find_all("td", class_=re.compile("bborder"))[3]
 		timeElapsed = timeRange.find("br").previousSibling
-		elapsedMin = int(timeElapsed[0:timeElapsed.find(":")])
-		elapsedSec = int(timeElapsed[timeElapsed.find(":")+1:])
-		events[eventId]["time"] = 60 * elapsedMin + elapsedSec
+		events[eventId]["time"] = toSecs(timeElapsed)
 
 		# Record the duration of each period
 		if events[eventId]["type"] == "pend":
@@ -406,18 +408,19 @@ for gameId in gameIds:
 			elif events[eventId]["desc"].lower().find("; wrap-around;") >= 0:
 				events[eventId]["subtype"] = "wrap-around"
 		elif events[eventId]["type"] == "penl":
-			subtypeStart = re.search("[a-z]", events[eventId]["desc"]).start() # We can find where the penalty type starts by finding the first lowercase letter in the description
+			# Find where the penalty type starts by finding the first lowercase letter in the description
+			subtypeStart = re.search("[a-z]", events[eventId]["desc"]).start()
 			events[eventId]["subtype"] = events[eventId]["desc"][subtypeStart - 1:events[eventId]["desc"].find("min)") + 4]
 
 		# Get the zone in which the event occurred; always use the home team's perspective
 		if events[eventId]["type"] == "block":
-			if eventTeam == teams["home"] and events[eventId]["desc"].lower().find("off. zone") >= 0:	# home team took shot, blocked by away team in away team's off. zone - probably doesn't happen
+			if eventTeam == teams["home"] and events[eventId]["desc"].lower().find("off. zone") >= 0:	# home team took shot, blocked by away team in away team's off. zone
 				events[eventId]["zone"] = "d"
 			elif eventTeam == teams["away"] and events[eventId]["desc"].lower().find("def. zone") >= 0:	# away team took shot, blocked by home team in home team's def. zone
 				events[eventId]["zone"] = "d"
 			elif eventTeam == teams["home"] and events[eventId]["desc"].lower().find("def. zone") >= 0:	# home team took shot, blocked by away team in away team's def. zone
 				events[eventId]["zone"] = "o"
-			elif eventTeam == teams["away"] and events[eventId]["desc"].lower().find("off. zone") >= 0:	# away team took shot, blocked by home team in home team's off. zone - probably doesn't happen
+			elif eventTeam == teams["away"] and events[eventId]["desc"].lower().find("off. zone") >= 0:	# away team took shot, blocked by home team in home team's off. zone
 				events[eventId]["zone"] = "o"
 		else: 
 			if eventTeam == teams["home"] and events[eventId]["desc"].lower().find("off. zone") >= 0:	# home team created event (excluding blocked shot) in home team's off. zone
@@ -435,7 +438,6 @@ for gameId in gameIds:
 		# If a goal was scored, increment awayScore or homeScore AFTER recording the score
 		#	i.e., for the first goal in the game, both awayScore = 0 and homeScore = 0
 		# Exclude shootout goals (this code assumes shootouts only occur in the regular season)
-
 		events[eventId]["awayScore"] = awayScore
 		events[eventId]["homeScore"] = homeScore
 		if events[eventId]["type"] == "goal":
@@ -452,7 +454,8 @@ for gameId in gameIds:
 		#
 
 		# Record all skaters and goalie on ice during the play
-		tds = r.find_all("td", class_=re.compile("bborder")) # Away players have index=6, home players have index=7
+		# Away players have index=6 (the 7th td element), home players have index=7 (the 8th td element)
+		tds = r.find_all("td", class_=re.compile("bborder")) 
 		onIce = [tds[6], tds[7]]
 
 		for i, td in enumerate(onIce):
@@ -474,8 +477,8 @@ for gameId in gameIds:
 					events[eventId][onIceTeam + "G"] = playerId
 			
 			# Store on-ice skater playerIds
-			for j, player in enumerate(onIceSkaters):
-				events[eventId][onIceTeam + "S" + str(j + 1)] = player
+			for j, playerId in enumerate(onIceSkaters):
+				events[eventId][onIceTeam + "S" + str(j + 1)] = playerId
 
 			# Store number of on-ice skaters
 			events[eventId][onIceTeam + "Skaters"] = len(onIceSkaters)
@@ -502,8 +505,6 @@ for gameId in gameIds:
 			filesExist = False
 				
 	if filesExist == False:
-		user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0.2214.94 Safari/537.36"
-		headers = { "User-Agent" : user_agent }
 		print "Downloading " + str(filenames)
 		for f in filenames:
 			nhlUrl = "http://www.nhl.com/scores/htmlreports/" + str(seasonArg) + "/" + f
@@ -575,21 +576,17 @@ for gameId in gameIds:
 						
 						# Cast period to int - if needed, convert regular season OT to period 4
 						if period.find("OT") >= 0:
-							period = "4"
+							period = 4
 						period = int(period)
 						
 						# We only want to output the values formatted as "Elapsed / Game"
 						if (start.find(" / ") > -1) and (end.find(" / ") > -1):
 
-							# Convert start time from mm:ss to elapsed seconds
+							# Convert start and end times from mm:ss to elapsed seconds
 							start = start[0:start.find(" / ")]
-							startMin = int(start[0:start.find(":")])
-							startSec = int(start[start.find(":")+1:]) + 60 * startMin
-							
-							# Convert end time from mm:ss to elapsed seconds
+							startSec = toSecs(start)
 							end = end[0:end.find(" / ")]
-							endMin = int(end[0:end.find(":")])
-							endSec = int(end[end.find(":")+1:]) + 60 * endMin
+							endSec = toSecs(end)
 							
 							# Record shift data
 							shifts[team][playerId][period].append([startSec, endSec])
@@ -805,11 +802,14 @@ for gameId in gameIds:
 				elif aSkaters == 3:
 					eventStrSit = "ev3"
 
-		# Get the score situation for the event, limited to -3 to +3
+		# Get the score situation for the event (from each team's perspective), limited to -3 to +3
 		hScoreSit = max(-3, min(3, event["homeScore"] - event["awayScore"]))
 		aScoreSit = -1 * hScoreSit
 
+		# Get stat to increment (e.g., gf and ga; sf and sa)
 		stat = ""
+		aSuffix = ""
+		hSuffix = ""
 		if event["type"] == "goal":
 			stat = "g"
 		elif event["type"] == "shot":
@@ -818,10 +818,6 @@ for gameId in gameIds:
 			stat = "m"
 		elif event["type"] == "block":
 			stat = "b"
-
-		# Record corsis for on-ice players
-		aSuffix = ""
-		hSuffix = ""
 		if event["team"] == teams["away"]:
 			aSuffix = "f"
 			hSuffix = "a"
@@ -855,23 +851,19 @@ for gameId in gameIds:
 			if stat == "g":
 				playerStats[event["homeG"]][eventStrSit][hScoreSit]["s" + hSuffix] += 1
 
-		# Record individual goals and corsis
+		# Record individual goals, corsis, assists
 		iScoreSit = ""
 		if event["team"] == teams["away"]:
 			iScoreSit = aScoreSit
 		elif event["team"] == teams["home"]:
 			iScoreSit = hScoreSit
-
-		playerStats[event["p1"]][eventStrSit][iScoreSit]["i" + stat] += 1
+		playerStats[event["p1"]][eventStrSit][iScoreSit]["i" + stat] += 1		# individual missed, blocked, on-goal shot
 		if event["type"] == "goal":
-			playerStats[event["p1"]][eventStrSit][iScoreSit]["is"] += 1
-
-		# Record assists
-		if event["type"] == "goal":
+			playerStats[event["p1"]][eventStrSit][iScoreSit]["is"] += 1			# individual goals
 			if "p2" in event and event["p2"] != "NULL":
-				playerStats[event["p2"]][eventStrSit][iScoreSit]["ia1"] += 1
+				playerStats[event["p2"]][eventStrSit][iScoreSit]["ia1"] += 1	# individual primary assist
 			if "p3" in event and event["p3"] != "NULL":
-				playerStats[event["p3"]][eventStrSit][iScoreSit]["ia2"] += 1
+				playerStats[event["p3"]][eventStrSit][iScoreSit]["ia2"] += 1	# individual secondary assist
 
 		# Record team stats
 		teamStats["away"][eventStrSit][aScoreSit][stat + aSuffix] += 1
