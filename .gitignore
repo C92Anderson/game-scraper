@@ -5,4 +5,5 @@ dbconfig.py
 
 
 /nhl-data/*
+/snet-data/*
 /data-for-db/*
