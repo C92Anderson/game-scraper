@@ -5,7 +5,8 @@ import os.path
 import sys
 import mysql.connector
 import re
-import dbconfig	# Database credentials
+import dbconfig
+import json
 
 # Translate strength situation for output
 # e.g., "awayGoaliePulled" gets translated to "ownGPulled" for the away team, and "oppGPulled" for the home team
@@ -67,7 +68,8 @@ connection = mysql.connector.connect(user=dbconfig.user, passwd=dbconfig.passwd,
 cursor = connection.cursor()
 
 # Directories
-inDir = "nhl-data/" + str(seasonArg) + "/"
+nhlInDir = "nhl-data/" + str(seasonArg) + "/"
+snetInDir = "snet-data/" + str(seasonArg) + "/"
 outDir = "data-for-db/" + str(seasonArg) + "/"
 
 scoreSits = [-3, -2, -1, 0, 1, 2, 3]
@@ -96,21 +98,33 @@ for gameId in gameIds:
 
 	#
 	#
+	# Check if snet file exists
+	# If it doesn't, skip the game
+	#
+	#
+
+	snetFilename = "snet-" + str(gameId) + ".json"
+	if os.path.isfile(snetInDir + snetFilename) == False:
+		print snetFilename + " is missing"
+		continue
+
+	#
+	#
 	# Load the PBP html file
 	#
 	#
 
 	# Download the PBP html file if it doesn't already exist
 	filename = "PL0" + str(gameId) + ".HTM"
-	if os.path.isfile(inDir + filename) == False:
+	if os.path.isfile(nhlInDir + filename) == False:
 		print "Downloading " + str(filename)
 		nhlUrl = "http://www.nhl.com/scores/htmlreports/" + str(seasonArg) + "/PL0" + str(gameId) + ".HTM"
-		savedFile = urllib.urlretrieve(nhlUrl, inDir + "PL0" + str(gameId) + ".HTM")
+		savedFile = urllib.urlretrieve(nhlUrl, nhlInDir + "PL0" + str(gameId) + ".HTM")
 		
-	print "Getting team abbreviations from " + str(filename)
+	print "Getting initial information from " + str(filename)
 
 	# Load PBP html file
-	htmlFile = file(inDir + "PL0" + str(gameId) + ".HTM", "r")
+	htmlFile = file(nhlInDir + "PL0" + str(gameId) + ".HTM", "r")
 	soup = BeautifulSoup(htmlFile.read(), "lxml")
 	htmlFile.close()
 
@@ -192,16 +206,16 @@ for gameId in gameIds:
 
 	# If boxscore html file doesn't exist, download it
 	filename = "Box0" + str(gameId) + ".html"
-	if os.path.isfile(inDir + filename) == False:
+	if os.path.isfile(nhlInDir + filename) == False:
 		print "Downloading " + str(filename)
 		nhlUrl = "http://www.nhl.com/gamecenter/en/boxscore?id=" + boxscoreUrl
 		savedFileName = "Box0" + str(gameId) + ".html"
-		savedFile = urllib.urlretrieve(nhlUrl, inDir + savedFileName)
+		savedFile = urllib.urlretrieve(nhlUrl, nhlInDir + savedFileName)
 		
-	print "Processing " + str(filename)
+	print "Recording player attributes from " + str(filename)
 	
 	# Load boxscore html file
-	htmlFile = file(inDir + "Box0" + str(gameId) + ".html", "r")
+	htmlFile = file(nhlInDir + "Box0" + str(gameId) + ".html", "r")
 	soup = BeautifulSoup(htmlFile.read(), "lxml")
 	htmlFile.close()
 
@@ -237,7 +251,7 @@ for gameId in gameIds:
 				boxPlayers[team][jersey]["position"] = r.find_all("td", colspan="1", rowspan="1")[2].text.lower()
 
 				href = r.find_all("a", class_="undMe", rel="skaterLinkData")[0]["href"]
-				boxPlayers[team][jersey]["playerId"] = href[href.find("?id=")+4:]
+				boxPlayers[team][jersey]["playerId"] = int(href[href.find("?id=")+4:])
 
 			# The second table is the away goalies, fourth table is the home goalies
 			if i == 1 or i == 3:
@@ -249,7 +263,7 @@ for gameId in gameIds:
 				boxPlayers[team][jersey]["position"] = "g"
 
 				href = r.find_all("a", class_="undMe", rel="goalieLinkData")[0]["href"]
-				boxPlayers[team][jersey]["playerId"] = href[href.find("?id=")+4:]
+				boxPlayers[team][jersey]["playerId"] = int(href[href.find("?id=")+4:])
 
 	# Done looping through boxscore stats tables
 
@@ -259,8 +273,8 @@ for gameId in gameIds:
 	#
 	#
 	
-	print "Processing " + str("PL0" + str(gameId) + ".HTM")
-	htmlFile = file(inDir + "PL0" + str(gameId) + ".HTM", "r")
+	print "Recording event data from " + str("PL0" + str(gameId) + ".HTM")
+	htmlFile = file(nhlInDir + "PL0" + str(gameId) + ".HTM", "r")
 	soup = BeautifulSoup(htmlFile.read(), "lxml")
 	htmlFile.close()
 
@@ -319,9 +333,9 @@ for gameId in gameIds:
  		# If the event is a SHOT: P1 shot it
  		# If the event is a MISS: P1 shot it
  		# If the event is a BLOCK: P1 shot it, P2 blocked it
- 		eventP1 = "NULL"
- 		eventP2 = "NULL"
- 		eventP3 = "NULL"
+ 		eventP1 = 0
+ 		eventP2 = 0
+ 		eventP3 = 0
 		numPlayers = events[eventId]["desc"].count("#")
 		if numPlayers >= 1:
 			eventP1 = events[eventId]["desc"].split("#")[1]
@@ -387,9 +401,9 @@ for gameId in gameIds:
 					eventP3 = boxPlayers["away"][eventP3]["playerId"]
 
 		# Store the eventPlayerIds
- 		events[eventId]["p1"] = eventP1
- 		events[eventId]["p2"] = eventP2
- 		events[eventId]["p3"] = eventP3
+ 		events[eventId]["p1"] = int(eventP1)
+ 		events[eventId]["p2"] = int(eventP2)
+ 		events[eventId]["p3"] = int(eventP3)
 
  		# Store the shot type or penalty type
 		if events[eventId]["type"] in ["goal", "shot", "block", "miss"]:
@@ -501,16 +515,16 @@ for gameId in gameIds:
 	
 	filesExist = True
 	for f in filenames:
-		if os.path.isfile(inDir + f) == False:
+		if os.path.isfile(nhlInDir + f) == False:
 			filesExist = False
 				
 	if filesExist == False:
 		print "Downloading " + str(filenames)
 		for f in filenames:
 			nhlUrl = "http://www.nhl.com/scores/htmlreports/" + str(seasonArg) + "/" + f
-			savedFile = urllib.urlretrieve(nhlUrl, inDir + f)
+			savedFile = urllib.urlretrieve(nhlUrl, nhlInDir + f)
 		
-	print "Processing " + str(filenames)
+	print "Recording shift data from " + str(filenames)
 
 	# Prepare the shift output file
 	outFile = open(outDir + str(gameId) + "-shifts.csv", "w")
@@ -521,7 +535,7 @@ for gameId in gameIds:
 	for i, f in enumerate(filenames):
 
 		# Load shift html file
-		htmlFile = file(inDir + f, "r")
+		htmlFile = file(nhlInDir + f, "r")
 		soup = BeautifulSoup(htmlFile.read(), "lxml")
 		htmlFile.close()
 
@@ -860,9 +874,9 @@ for gameId in gameIds:
 		playerStats[event["p1"]][eventStrSit][iScoreSit]["i" + stat] += 1		# individual missed, blocked, on-goal shot
 		if event["type"] == "goal":
 			playerStats[event["p1"]][eventStrSit][iScoreSit]["is"] += 1			# individual goals
-			if "p2" in event and event["p2"] != "NULL":
+			if "p2" in event and event["p2"] != 0:
 				playerStats[event["p2"]][eventStrSit][iScoreSit]["ia1"] += 1	# individual primary assist
-			if "p3" in event and event["p3"] != "NULL":
+			if "p3" in event and event["p3"] != 0:
 				playerStats[event["p3"]][eventStrSit][iScoreSit]["ia2"] += 1	# individual secondary assist
 
 		# Record team stats
@@ -871,6 +885,72 @@ for gameId in gameIds:
 		if stat == "g":
 			teamStats["away"][eventStrSit][aScoreSit]["s" + aSuffix] += 1
 			teamStats["home"][eventStrSit][hScoreSit]["s" + hSuffix] += 1
+
+	#
+	#
+	# Merge snet location data with event data
+	# We'll only get locations for corsis (snet also provides location for penalties)
+	#
+	#
+
+	print "Adding event locations from " + str(snetFilename)
+
+	snetEvents = ""
+	with open(snetInDir + snetFilename) as jsonFile:    
+		snetEvents = json.load(jsonFile)
+
+	for ev in snetEvents:
+		evPer = ev["period"]
+		evTime = toSecs(ev["elapsed"])
+
+		# Use the same event type labels as the NHL data
+		# snet "event" values: score, shot-on-goal, shot-blocked, shot-missed, hit, penalty
+		# "event" values are mutually exclusive - a goal has event "score", not "shot-on-goal"
+		evEvent = ev["event"]
+		if evEvent == "penalty": # Skip penalties
+			continue
+		elif evEvent == "score":
+			evEvent = "goal"
+		elif evEvent == "shot-on-goal":
+			evEvent = "shot"
+		elif evEvent == "shot-blocked":
+			evEvent = "block"
+		elif evEvent == "shot-missed":
+			evEvent = "miss"
+
+		evP1 = 0
+		evP2 = 0
+		evP3 = 0
+		if evEvent == "goal":
+			for i, player in enumerate(ev["participants"]):
+				if player["role"] == "scorer":
+					evP1 = player["playerId"]			# Scorer
+				elif player["role"] == "assist":
+					if i == 1:
+						evP2 = player["playerId"]		# Primary assister
+					elif i == 2:
+						evP3 = player["playerId"]		# Secondary assister
+		elif evEvent == "shot" or evEvent == "miss":
+			evP1 = ev["participants"][0]["playerId"]	# Shooter
+		elif evEvent == "block":
+			evP1 = ev["participants"][0]["playerId"]	# Shooter
+			evP2 = ev["participants"][1]["playerId"]	# Blocker
+
+		evLoc = ev["location"]
+
+		# Loop through nhl events to find the matching event, then append the location coordinates
+		found = False
+		for nEv in events:
+			if found == True:
+				break
+			else:
+				if evPer == events[nEv]["period"]:
+					if evTime == events[nEv]["time"]:
+						if evEvent == events[nEv]["type"]:
+							if evP1 == events[nEv]["p1"] and evP2 == events[nEv]["p2"] and evP3 == events[nEv]["p3"]:
+								found = True
+								events[nEv]["locX"] = evLoc[0]
+								events[nEv]["locY"] = evLoc[1]
 
 	#
 	#
@@ -937,7 +1017,7 @@ for gameId in gameIds:
 	# Output events
 	#
 
-	columns = ["period", "time", "desc", "type", "subtype", "team", "p1", "p2", "p3", "awayScore", "homeScore", "awaySkaters", "homeSkaters", "awayS1", "awayS2", "awayS3", "awayS4", "awayS5", "awayS6", "awayG", "homeS1", "homeS2", "homeS3", "homeS4", "homeS5", "homeS6", "homeG"]
+	columns = ["period", "time", "desc", "type", "subtype", "team", "p1", "p2", "p3", "awayScore", "homeScore", "awaySkaters", "homeSkaters", "awayS1", "awayS2", "awayS3", "awayS4", "awayS5", "awayS6", "awayG", "homeS1", "homeS2", "homeS3", "homeS4", "homeS5", "homeS6", "homeG", "locX", "locY"]
 	outFile = open(outDir + str(gameId) + "-events.csv", "w")
 	outString = "season,date,gameId,eventId"
 	for cl in columns:
@@ -950,6 +1030,9 @@ for gameId in gameIds:
 			if cl not in events[eid]: # Handle cases where a key doesn't exist - e.g., if the raw PBP file didn't have any on-ice skaters for an event (like 'gend'), the 'homeS1' etc. keys won't exist
 				outString += ",NULL"
 			elif events[eid][cl] == "": # Replace blank values with NULL
+				outString += ",NULL"
+			elif events[eid][cl] == 0 and cl in ["p1", "p2", "p3", "awayS1", "awayS2", "awayS3", "awayS4", "awayS5", "awayS6", "awayG", "homeS1", "homeS2", "homeS3", "homeS4", "homeS5", "homeS6", "homeG"]:
+				# Replace playerIds of 0 with NULL
 				outString += ",NULL"
 			else:
 				outString += "," + str(events[eid][cl])
