@@ -60,13 +60,22 @@ for sId in snetIds:
 	# Get the NHL gameId and the plays json
 	gameId = ""
 	plays = dict()
+	players = dict()
 	for key, value in jsonDict.items():
 		if key == "game":
 			gameId = value["id"]
 		elif key == "plays":
 			plays = value
+		elif key == "players":
+			players = value
+
+	pprint(players)
 
 	# Write events json to a file and use the nhl gameId as the filename
-	outFile = open(outDir + "snet-" + str(gameId) + ".json", "w")
+	outFile = open(outDir + "snet-plays" + str(gameId) + ".json", "w")
 	outFile.write(json.dumps(plays))
+	outFile.close()
+
+	outFile = open(outDir + "snet-players" + str(gameId) + ".json", "w")
+	outFile.write(json.dumps(players))
 	outFile.close()
