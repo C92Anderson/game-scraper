@@ -249,6 +249,147 @@ for gameId in gameIds:
 			evPlayerJerseys[0] = evPlayerJerseys[1]
 			evPlayerJerseys[1] = tempP
 
+		# TODO
+		# Create the same roletypes found in the json
+		# Maybe update the logic to convert from jerseys to ids based on this as well, since the descriptions contain team AND jersey number
+		# This code probably replaces lots of old code
+
+		roles = dict()
+		if evType == "fac":
+			aTaker = evDesc.split("#")[1]				# The away FO taker is always listed first
+			aTaker = aTaker[0:aTaker.find(" ")]
+			hTaker = evDesc.split("#")[2]				# The home FO taker is always listed first
+			hTaker = hTaker[0:hTaker.find(" ")]
+
+			winTeam = evDesc[0:evDesc.find(" ")].lower()
+			if winTeam == outTeams["away"]["abbrev"]:
+				roles["winner"] = "away-" + aTaker
+				roles["loser"] = "home-" + hTaker
+			elif winTeam == outTeams["home"]["abbrev"]:
+				roles["winner"] = "home-" + hTaker
+				roles["loser"] = "away-" + aTaker
+
+		elif evType in ["shot", "miss"]:
+			
+			shooter = evDesc.split("#")[1]
+			shooter = shooter[0:shooter.find(" ")]
+
+			shooterTeam = evDesc[0:evDesc.find(" ")].lower()
+			if shooterTeam == outTeams["away"]["abbrev"]:
+				shooter = "away-" + shooter
+			elif shooterTeam == outTeams["home"]["abbrev"]:
+				shooter = "home-" + shooter
+			roles["shooter"] = shooter
+
+		elif evType == "goal":
+
+			scorerTeam = evDesc[0:evDesc.find(" ")].lower()
+			numPlayers = evDesc.count("#")
+
+			if numPlayers >= 1:
+				scorer = evDesc.split("#")[1]				# Scorer is always listed first
+				scorer = scorer[0:scorer.find(" ")]
+				if scorerTeam == outTeams["away"]["abbrev"]:
+					scorer = "away-" + scorer
+				elif scorerTeam == outTeams["home"]["abbrev"]:
+					scorer = "home-" + scorer
+				roles["scorer"] = scorer
+
+			if numPlayers >= 2:
+				a1 = evDesc.split("#")[2]				# Primary assister is always listed second
+				a1 = a1[0:a1.find(" ")]
+				if scorerTeam == outTeams["away"]["abbrev"]:
+					a1 = "away-" + a1
+				elif scorerTeam == outTeams["home"]["abbrev"]:
+					a1 = "home-" + a1
+				roles["a1"] = a1
+
+			if numPlayers >= 3:
+				a2 = evDesc.split("#")[2]				# Secondary assister is always listed second
+				a2 = a2[0:a2.find(" ")]
+				if scorerTeam == outTeams["away"]["abbrev"]:
+					a2 = "away-" + a2
+				elif scorerTeam == outTeams["home"]["abbrev"]:
+					a2 = "home-" + a2
+				roles["a2"] = a2
+
+		elif evType == "hit":
+
+			hitter = evDesc.split("#")[1]				# Hitter is always listed first
+			hitter = hitter[0:hitter.find(" ")]
+			hittee = evDesc.split("#")[2]
+			hittee = hittee[0:hittee.find(" ")]
+
+			hitterTeam = evDesc[0:evDesc.find(" ")].lower()
+			if hitterTeam == outTeams["away"]["abbrev"]:
+				roles["hitter"] = "away-" + hitter
+				roles["hittee"] = "home-" + hittee
+			elif hitterTeam == outTeams["home"]["abbrev"]:
+				roles["hitter"] = "home-" + hitter
+				roles["hittee"] = "away-" + hittee
+
+		elif evType == "penl":
+
+			takerTeam = evDesc[0:evDesc.find(" ")].lower()
+
+			# Get the content between the 1st and 2nd spaces
+			# If a player took the penalty, then it will return #XX
+			# If a team took the penalty, then it will return 'TEAM'
+			penaltyOn = evDesc.split(" ")[1]
+			poundIdx = penaltyOn.find("#")
+			if poundIdx >= 0:
+				penaltyOn = penaltyOn[poundIdx+1:]
+				if takerTeam == outTeams["away"]["abbrev"]:
+					penaltyOn = "away-" + penaltyOn
+				elif takerTeam == outTeams["home"]["abbrev"]:
+					penaltyOn = "home-" + penaltyOn
+			else:
+				penaltyOn = None
+
+			# Get the player who drew the penalty
+			drawnBy = None
+			pattern = "Drawn By: "
+			drawnByIdx = evDesc.find(pattern)
+			if drawnByIdx >= 0:								# Only search for the pattern if it exists
+				drawnBy = evDesc[evDesc.find(pattern):]		# Returns a substring *starting* with the pattern
+				drawnBy = drawnBy[len(pattern):]			# Remove the pattern from the substring
+				drawnBy = drawnBy[drawnBy.find("#")+1:]		# Remove the team abbreviation and "#" from the beginning of the string											
+				drawnBy = drawnBy[0:drawnBy.find(" ")]		# Isolate the jersey number
+
+				if takerTeam == outTeams["away"]["abbrev"]:	# The penalty-drawer is always on the opposite team of the penalty-taker
+					drawnBy = "home-" + drawnBy
+				elif takerTeam == outTeams["home"]["abbrev"]:
+					drawnBy = "away-" + drawnBy
+
+			# Get the player who served the penalty
+			servedBy = None
+			pattern = "Served By: #"
+			servedByIdx = evDesc.find(pattern)
+			if servedByIdx >= 0:							# Only search for the pattern if it exists
+				servedBy = evDesc[evDesc.find(pattern):]	# Returns a substring *starting* with the pattern
+				servedBy = servedBy[len(pattern):]			# Remove the pattern from the substring
+				servedBy = servedBy[0:servedBy.find(" ")]	# Isolate the jersey number
+
+				if takerTeam == outTeams["away"]["abbrev"]:
+					servedBy = "away-" + servedBy
+				elif takerTeam == outTeams["home"]["abbrev"]:
+					servedBy = "home-" + servedBy
+
+			# In the json file, if it's a too many men bench minor,
+			#	the description looks like this: "Too many men/ice served by Sam Gagner"
+			#	and Sam Gagner is given playerType "PenaltyOn"
+			# To replicate this with the html data, do the following:
+			if penaltyOn is None and servedBy is not None:
+				penaltyOn = servedBy
+				servedBy = None
+
+			print evDesc
+			print "penaltyOn:" + str(penaltyOn) + " --- drawer:" + str(drawnBy) + " --- server:" + str(servedBy)
+
+			roles["penaltyon"] = penaltyOn
+			roles["servedby"] = servedBy
+			roles["drewby"] = drawnBy
+
 		#
 		# Convert jersey numbers into playerIds - depending on the event type, we need to look up the jersey number in the home/away player dictionaries
 		#
