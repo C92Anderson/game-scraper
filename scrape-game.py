@@ -97,6 +97,7 @@ for gameId in gameIds:
 	events = jsonDict["liveData"]["plays"]["allPlays"]
 
 	# Reformat the keys in the 'players' dictionary: from 'ID#' to # (as an int), where # is the playerId
+	# We're going to use the players dictionary to get player positions and names
 	tempPlayers = dict()
 	for pId in players:
 		newKey = int(pId[2:])
@@ -147,6 +148,8 @@ for gameId in gameIds:
 	for pId in players:
 		outPlayers[pId] = dict()
 		outPlayers[pId]["position"] = players[pId]["primaryPosition"]["abbreviation"].lower()
+		outPlayers[pId]["firstName"] = players[pId]["firstName"]
+		outPlayers[pId]["lastName"] = players[pId]["lastName"]
 
 		# Initialize stats
 		for strSit in strengthSits:
@@ -569,14 +572,6 @@ for gameId in gameIds:
 			if found == True:
 				break
 			else:
-
-				# Used to check events that couldn't be matched
-				# if jId == 3:
-				# 	print str(htmlEvents[hEv]["period"]) + " -- " + str(jPer)
-				# 	print str(htmlEvents[hEv]["time"]) + " -- " + str(jTime)
-				# 	print htmlEvents[hEv]["type"] + " -- " + jType
-				# 	print htmlEvents[hEv]["roles"] + " -- " + jRoles
-
 				if htmlEvents[hEv]["period"] == jPer and htmlEvents[hEv]["time"] == jTime and evTypes[htmlEvents[hEv]["type"]] == jType and htmlEvents[hEv]["roles"] == jRoles:
 					found = True
 					jAwaySkaterCount = len(htmlEvents[hEv]["awaySkaters"])
@@ -782,7 +777,6 @@ for gameId in gameIds:
 				aPlayers.append(outEvents[ev]["aG"])
 
 			for pId in aPlayers:
-				print pId
 				if evType == "goal":
 					if evTeam == outTeams["away"]["abbrev"]:
 						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["gf"] += 1
