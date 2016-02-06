@@ -493,12 +493,23 @@ for gameId in gameIds:
 
 	for jEv in events:
 
-		# Information needed to match the json and html events
-		jPer = jEv["about"]["period"]
-		jTime = toSecs(jEv["about"]["periodTime"])
-		jType = jEv["result"]["eventTypeId"].lower()
-		jDesc = jEv["result"]["description"]
-		
+		# Create a dictionary for this event
+		jId = jEv["about"]["eventIdx"]
+		outEvents[jId] = dict()
+
+		outEvents[jId]["period"] = jEv["about"]["period"]
+		outEvents[jId]["periodType"] = jEv["about"]["periodType"].lower()
+		outEvents[jId]["time"] = toSecs(jEv["about"]["periodTime"])
+
+		outEvents[jId]["description"] = jEv["result"]["description"]
+		outEvents[jId]["type"] = jEv["result"]["eventTypeId"].lower()
+		if "secondaryType" in jEv["result"]:
+			outEvents[jId]["subtype"] = jEv["result"]["secondaryType"].lower()
+
+		if "coordinates" in jEv and len(jEv["coordinates"]) == 2:
+			outEvents[jId]["locX"] = jEv["coordinates"]["x"]
+			outEvents[jId]["locY"] = jEv["coordinates"]["y"]
+
 		# Record players and their roles
 		# Some additional processing required:
 		# 	For goals, the json simply lists "assist" for both assisters. Enhance this to "assist1" and "assist2" to match the html roles we created above
@@ -507,24 +518,24 @@ for gameId in gameIds:
 		#	For "puck over glass" penalties, there seems to be a bug:
 		#		The json description in 2015020741 is: Braden Holtby Delaying Game - Puck over glass served by Alex Ovechkin
 		#		However, Ovechkin is given the playerType: "DrewBy" -- we're going to correct this by giving him type "ServedBy"
+
 		jRoles = dict()
 		for jP in jEv["players"]:
 
 			role = jP["playerType"].lower()
 
-			if jType == "giveaway":
+			if outEvents[jId]["type"] == "giveaway":
 				role = "giver"
-			elif jType == "takeaway":
+			elif outEvents[jId]["type"] == "takeaway":
 				role = "taker"
-			elif jType == "goal":
-
+			elif outEvents[jId]["type"] == "goal":
 				pattern = "assists: "
-				assistersIdx = jDesc.lower().find(pattern)
-				noAssistsIdx = jDesc.lower().find("assists: none")
+				assistersIdx = outEvents[jId]["description"].lower().find(pattern)
+				noAssistsIdx = outEvents[jId]["description"].lower().find("assists: none")
 				if assistersIdx >= 0 and noAssistsIdx < 0:
 					a1String = None
 					a2String = None
-					assistersString = jDesc[jDesc.lower().find(pattern):]
+					assistersString = outEvents[jId]["description"][outEvents[jId]["description"].lower().find(pattern):]
 					pattern = "), "
 					commaIdx = assistersString.find(pattern)
 					if commaIdx < 0: 	# 1 assister
@@ -541,53 +552,49 @@ for gameId in gameIds:
 
 			jRoles[role] = jP["player"]["id"]
 		
-		if jType == "shot":
+		if outEvents[jId]["type"] == "shot":
 			del jRoles["goalie"]
-		elif jType == "penalty":
-			if jDesc.lower().find("puck over glass") >= 0:
+		elif outEvents[jId]["type"] == "penalty":
+			if outEvents[jId]["description"].lower().find("puck over glass") >= 0:
 				if "servedby" not in jRoles and "drewby" in jRoles:
 					jRoles["servedby"] = jRoles["drewby"]
 					del jRoles["drewby"]
 
-		jSubtype = None
-		if "secondaryType" in jEv["result"]:
-			jSubtype = jEv["result"]["secondaryType"].lower()
+		# If there's no roles, we don't want to create a 'roles' key in the event's output dictionary
+		if len(jRoles) > 0:
+			outEvents[jId]["roles"] = jRoles
 
-		# Other information to output
-		jId = jEv["about"]["eventIdx"]
-		jCoords = jEv["coordinates"]
-		
-		jAwayGoals = jEv["about"]["goals"]["away"]
-		jHomeGoals = jEv["about"]["goals"]["home"]
-		jPeriodType = jEv["about"]["periodType"].lower()
+		#
+		# Done getting player roles
+		#
 
-		# Information that will be taken from the html events
-		jAwaySkaterCount = None
-		jHomeSkaterCount = None
-		jAwaySkaters = None
-		jHomeSkaters = None
-		jAwayGoalie = None
-		jHomeGoalie = None
-		jHZone = None
+		#
+		#
+		# Find the corresponding html event so we can record: the event team, event's zone, all on-ice players
+		#
+		#
 
-		# The json event also contains a team, but using the html team saves us from checking that the eventTeam is determined the same way 
-		# One difference: for blocked shots, the json team is the team who made the block; the html team is the team who took the shot
-		jTeam = None 
-
-		# Find the matching event in the html events
 		found = False
 		for hEv in htmlEvents:
 			if found == True:
 				break
 			else:
-				if htmlEvents[hEv]["period"] == jPer and htmlEvents[hEv]["time"] == jTime and evTypes[htmlEvents[hEv]["type"]] == jType and htmlEvents[hEv]["roles"] == jRoles:
+				if (htmlEvents[hEv]["period"] == outEvents[jId]["period"]
+					and htmlEvents[hEv]["time"] == outEvents[jId]["time"]
+					and evTypes[htmlEvents[hEv]["type"]] == outEvents[jId]["type"]
+					and htmlEvents[hEv]["roles"] == jRoles):
+
 					found = True
-					jAwaySkaterCount = len(htmlEvents[hEv]["awaySkaters"])
-					jHomeSkaterCount = len(htmlEvents[hEv]["homeSkaters"])
-					jAwaySkaters = htmlEvents[hEv]["awaySkaters"]
-					jHomeSkaters = htmlEvents[hEv]["homeSkaters"]
-					jHZone = htmlEvents[hEv]["hZone"]
-					jTeam = htmlEvents[hEv]["team"]
+					outEvents[jId]["aSkaterCount"] = len(htmlEvents[hEv]["awaySkaters"])
+					outEvents[jId]["hSkaterCount"] = len(htmlEvents[hEv]["homeSkaters"])
+					outEvents[jId]["aSkaters"] = htmlEvents[hEv]["awaySkaters"]
+					outEvents[jId]["hSkaters"] = htmlEvents[hEv]["homeSkaters"]
+
+					if htmlEvents[hEv]["hZone"] is not None:
+						outEvents[jId]["hZone"] = htmlEvents[hEv]["hZone"]
+
+					if htmlEvents[hEv]["team"] is not None:
+						outEvents[jId]["team"] = htmlEvents[hEv]["team"]
 
 					if "awayGoalie" in htmlEvents[hEv]:
 						jAwayGoalie = htmlEvents[hEv]["awayGoalie"]
@@ -599,56 +606,20 @@ for gameId in gameIds:
 
 		# Print unmatched json events
 		if found == False:
-			print "Unmatched json event " + str(jId) + ": " + jDesc
+			print "Unmatched json event " + str(jId) + ": " + outEvents[jId]["description"]
 
-		#
-		#
-		# Store event information for output
-		#
-		#
-
-		outEvents[jId] = dict()
-		outEvents[jId]["period"] = jPer
-		outEvents[jId]["periodType"] = jPeriodType
-		outEvents[jId]["time"] = jTime
-		outEvents[jId]["description"] = jDesc
-		outEvents[jId]["type"] = jType
-		outEvents[jId]["team"] = jTeam
-		outEvents[jId]["hZone"] = jHZone
-		outEvents[jId]["roles"] = jRoles
-
-		if jSubtype is not None:
-			outEvents[jId]["subtype"] = jSubtype
-
-		# For goals, the json includes the goal itself in the score situation
-		# But it's more accurate to say that the first goal was scored when it was 0-0
-		if jType == "goal":
-			if jTeam == outTeams["away"]["abbrev"]:
-				outEvents[jId]["aScore"] = jAwayGoals - 1
-				outEvents[jId]["hScore"] = jHomeGoals	
-			elif jTeam == outTeams["home"]["abbrev"]:
-				outEvents[jId]["aScore"] = jAwayGoals
-				outEvents[jId]["hScore"] = jHomeGoals - 1	
+		# Record the home and away scores when the event occurred
+		# For goals, the json includes the goal itself in the score situation, but it's more accurate to say that the first goal was scored when it was 0-0
+		if outEvents[jId]["type"] == "goal":
+			if outEvents[jId]["team"] == outTeams["away"]["abbrev"]:
+				outEvents[jId]["aScore"] = jEv["about"]["goals"]["away"] - 1
+				outEvents[jId]["hScore"] = jEv["about"]["goals"]["home"]	
+			elif outEvents[jId]["team"] == outTeams["home"]["abbrev"]:
+				outEvents[jId]["aScore"] = jEv["about"]["goals"]["away"]
+				outEvents[jId]["hScore"] = jEv["about"]["goals"]["home"] - 1	
 		else:
-			outEvents[jId]["aScore"] = jAwayGoals
-			outEvents[jId]["hScore"] = jHomeGoals
-
-		outEvents[jId]["locX"] = None
-		outEvents[jId]["locY"] = None
-		if len(jCoords) == 2:
-			outEvents[jId]["locX"] = jCoords["x"]
-			outEvents[jId]["locY"] = jCoords["y"]
-
-		outEvents[jId]["aSkaterCount"] = jAwaySkaterCount
-		outEvents[jId]["aSkaters"] = jAwaySkaters
-
-		outEvents[jId]["hSkaterCount"] = jHomeSkaterCount
-		outEvents[jId]["hSkaters"] = jHomeSkaters
-
-		if jAwayGoalie is not None:
-			outEvents[jId]["aG"] = jAwayGoalie
-		if jHomeGoalie is not None:
-			outEvents[jId]["hG"] = jHomeGoalie
+			outEvents[jId]["aScore"] = jEv["about"]["goals"]["away"]
+			outEvents[jId]["hScore"] = jEv["about"]["goals"]["home"]
 
 	#
 	# Done looping through json events to match events with html events and preparing outEvents
