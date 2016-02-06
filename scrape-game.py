@@ -7,8 +7,6 @@ import re
 from pprint import pprint
 from bs4 import BeautifulSoup
 
-
-
 # Take string "mm:ss" and return the number of seconds (as an integer)
 def toSecs(timeStr):
 	mm = int(timeStr[0:timeStr.find(":")])
@@ -91,10 +89,12 @@ for gameId in gameIds:
 	inFile.close()
 
 	gameDate = jsonDict["gameData"]["datetime"]["dateTime"]
-	gameDate = int(gameDate[0:10].replace("-", ""))		# Convert from dateTime format to an int (of the date)
-	players = jsonDict["gameData"]["players"]			# Keys: 'ID#' where # is a playerId
-	teams = jsonDict["gameData"]["teams"]				# Keys: 'home', 'away'
-	events = jsonDict["liveData"]["plays"]["allPlays"]
+	gameDate = int(gameDate[0:10].replace("-", ""))					# Convert from dateTime format to an int (of the date)
+	players = copy.deepcopy(jsonDict["gameData"]["players"])		# Keys: 'ID#' where # is a playerId
+	teams = copy.deepcopy(jsonDict["gameData"]["teams"])			# Keys: 'home', 'away'
+	events = copy.deepcopy(jsonDict["liveData"]["plays"]["allPlays"])
+	rosters = copy.deepcopy(jsonDict["liveData"]["boxscore"]["teams"])
+	jsonDict.clear()
 
 	# Reformat the keys in the 'players' dictionary: from 'ID#' to # (as an int), where # is the playerId
 	# We're going to use the players dictionary to get player positions and names
@@ -129,7 +129,6 @@ for gameId in gameIds:
 	# Keys: 'home-##' and 'away-##' where ## are jersey numbers
 	# Values: playerIds
 	playerIds = dict()
-	rosters = jsonDict["liveData"]["boxscore"]["teams"]
 	for iceSit in rosters:							# 'iceSit' will be 'home' or 'away'
 		for player in rosters[iceSit]["players"]:		# 'player' will be 'ID#' where # is a playerId
 
@@ -158,6 +157,7 @@ for gameId in gameIds:
 			for scSit in scoreSits:
 				outPlayers[pId][strSit][scSit] = dict()
 
+				outPlayers[pId][strSit][scSit]["toi"] = 0
 				outPlayers[pId][strSit][scSit]["ig"] = 0		# individual goals
 				outPlayers[pId][strSit][scSit]["is"] = 0
 				outPlayers[pId][strSit][scSit]["ibs"] = 0
@@ -809,9 +809,223 @@ for gameId in gameIds:
 						evAZone = "o"
 					outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]][evAZone + "fo"] += 1
 
+	#
+	#
+	# Process shift json
+	#
+	#
 
-				
-	pprint(outPlayers)
+	inFile = file(inDir + shiftJson, "r")
+	inString = inFile.read()
+	jsonDict = json.loads(inString)
+	inFile.close()
+
+	shifts = copy.deepcopy(jsonDict["data"])
+	jsonDict.clear()
+
+	nestedShifts = dict()
+	maxPeriod = 0
+	periodDurs = dict()
+
+	#
+	# Nest the raw shift data (which is flat) by player
+	#
+
+	for s in shifts:
+
+		# json period values: 1, 2, 3, 4 (regular season OT), 5 (regular season SO)
+		# For regular season, period 5 is unreliable:
+		#	2015020759 went to SO, but only a single player has a shift with period 5, and the start and end times are 0:00 - this was the only SO goal
+		pId = s["playerId"]
+		period = s["period"]	
+		start = toSecs(s["startTime"])
+		end = toSecs(s["endTime"])
+
+		# Ignore SO for regular season games
+		if (gameId < 30000 and period <= 4) or gameId >= 30000:
+
+			# If the playerId doesn't already exist, then create a new dictionary for the player and store some player properties
+			if pId not in nestedShifts:
+				nestedShifts[pId] = dict()
+				nestedShifts[pId]["firstName"] = s["firstName"]
+				nestedShifts[pId]["lastName"] = s["lastName"]
+				nestedShifts[pId]["position"] = outPlayers[pId]["position"]
+				nestedShifts[pId]["team"] = s["teamAbbrev"].lower()
+
+				if nestedShifts[pId]["team"] == outTeams["home"]["abbrev"]:
+					nestedShifts[pId]["iceSit"] = "home"
+				elif nestedShifts[pId]["team"] == outTeams["away"]["abbrev"]:
+					nestedShifts[pId]["iceSit"] = "away"
+
+			# Record the maxPeriod
+			if period > maxPeriod:
+				maxPeriod = period
+
+			# Record the period lengths by tracking the maximum shift end time
+			if period not in periodDurs:
+				periodDurs[period] = 0
+
+			if end > periodDurs[period]:
+				periodDurs[period] = end
+
+			# Create a dictionary entry for each period
+			# The key is the period number (integer) and the value is a list of seconds when the player was on the ice
+			# The list of times is 0-based: a player on the ice from 00:00 to 00:05 will have the following entries in the list: 0, 1, 2, 3, 4
+			if period not in nestedShifts[pId]:
+				nestedShifts[pId][period] = []
+
+			nestedShifts[pId][period].extend(range(start, end))
+
+	#
+	# Some players may not have played for an entire period
+	# Create a dictionary entry for these periods so we can loop through all periods for all players without any errors
+	#
+
+	for pId in nestedShifts:
+		for period in range(1, maxPeriod + 1):
+			if period not in nestedShifts[pId]:
+				nestedShifts[pId][period] = []
+
+	#
+	# Process the shifts, one period at a time
+	#
+
+	for period in range(1, maxPeriod + 1):
+
+		#
+		# Skip shootout in regular season
+		#
+		if (gameId < 30000 and period >= 5):
+			continue
+
+		#
+		# Record the number of goalies and skaters on the ice at each second (the list index represents the number of seconds elapsed)
+		# For a 20-second period, each of these lists will have length 20 (indices 0 to 19, which matches how we stored times-on-ice in nestedShifts)
+		#
+
+		aGCountPerSec = [0] * periodDurs[period]	# Number of away goalies on the ice at each second
+		hGCountPerSec = [0] * periodDurs[period]	# Number of home goalies on the ice at each second
+		aSCountPerSec = [0] * periodDurs[period]	# Number of away skaters on the ice at each second
+		hSCountPerSec = [0] * periodDurs[period]	# Number of home skaters on the ice at each second
+
+		# Loop through each player's shifts (for the current period)
+		# Increment the skater counts for the times when the player was on the ice
+		for pId in nestedShifts:
+			if nestedShifts[pId]["iceSit"] == "home":
+				if nestedShifts[pId]["position"] == "g":
+					for sec in nestedShifts[pId][period]:
+						hGCountPerSec[sec] += 1
+				else:
+					for sec in nestedShifts[pId][period]:
+						hSCountPerSec[sec] += 1
+			elif nestedShifts[pId]["iceSit"] == "away":
+				if nestedShifts[pId]["position"] == "g":
+					for sec in nestedShifts[pId][period]:
+						aGCountPerSec[sec] += 1
+				else:
+					for sec in nestedShifts[pId][period]:
+						aSCountPerSec[sec] += 1
+
+		#
+		# For each strength situation, store the seconds (as a set) at which the situation occurred
+		#
+
+		ownGPulledSecs = dict()
+		ownGPulledSecs["away"] = set()
+		ownGPulledSecs["home"] = set()
+
+		ppSecs = dict()
+		ppSecs["away"] = set()
+		ppSecs["home"] = set()
+
+		pkSecs = dict()
+		pkSecs["away"] = set()
+		pkSecs["home"] = set()
+
+		ev3Secs = set()
+		ev4Secs = set()
+		ev5Secs = set()
+
+		for sec in range(0, periodDurs[period]):
+			
+			if aGCountPerSec[sec] == 0:
+				ownGPulledSecs["away"].add(sec)
+			elif hGCountPerSec[sec] == 0:
+				ownGPulledSecs["home"].add(sec)
+			elif aSCountPerSec[sec] - hSCountPerSec[sec] > 0:
+				ppSecs["away"].add(sec)
+				pkSecs["home"].add(sec)
+			elif hSCountPerSec[sec] - aSCountPerSec[sec] > 0:
+				ppSecs["home"].add(sec)
+				pkSecs["away"].add(sec)
+			elif aSCountPerSec[sec] == hSCountPerSec[sec]:
+				if aSCountPerSec[sec] == 5:
+					ev5Secs.add(sec)
+				elif aSCountPerSec[sec] == 4:
+					ev4Secs.add(sec)
+				elif aSCountPerSec[sec] == 3:
+					ev3Secs.add(sec)
+
+		#
+		# Record the score differential at each second (the list index represents the number of seconds elapsed)
+		# The score differential is calculated from the home team's perspective (home - away)
+		#
+
+		periodStart = [outEvents[ev] for ev in outEvents if outEvents[ev]["type"] == "period_start" and outEvents[ev]["period"] == period][0]
+		goals = [outEvents[ev] for ev in outEvents if outEvents[ev]["type"] == "goal" and outEvents[ev]["period"] == period]
+
+		# Initialize the dictionary by setting each second to the score differential at the period's start
+		scoreDiffPerSec = dict()
+		scoreDiffPerSec["home"] = [periodStart["hScore"] - periodStart["aScore"]] * periodDurs[period]
+		scoreDiffPerSec["away"] = [periodStart["aScore"] - periodStart["hScore"]] * periodDurs[period]
+
+		# For each goal, update the score situation at the time of the goal until the period's end
+		for goal in goals:
+			if goal["team"] == outTeams["home"]["abbrev"]:
+				for sec in range(goal["time"], periodDurs[period]):
+					scoreDiffPerSec["home"][sec] += 1
+					scoreDiffPerSec["away"][sec] -= 1
+			elif goal["team"] == outTeams["away"]["abbrev"]:
+				for sec in range(goal["time"], periodDurs[period]):
+					scoreDiffPerSec["away"][sec] += 1
+					scoreDiffPerSec["home"][sec] -= 1
+
+		#
+		# For each score situation, store the seconds (as a set) at which the situation occurred
+		#
+
+		# Initialize dictionary
+		scoreSitSecs = dict()
+		scoreSitSecs["home"] = dict()
+		scoreSitSecs["away"] = dict()
+		for iceSit in scoreSitSecs:
+			scoreSitSecs[iceSit][-3] = set()
+			scoreSitSecs[iceSit][-2] = set()
+			scoreSitSecs[iceSit][-1] = set()
+			scoreSitSecs[iceSit][-0] = set()
+			scoreSitSecs[iceSit][1] = set()
+			scoreSitSecs[iceSit][2] = set()
+			scoreSitSecs[iceSit][3] = set()
+
+		# Populate the dictionary
+		for sec in range(0, periodDurs[period]):
+
+			# Limit score situations to +/- 3
+			hAdjScoreSit = max(-3, min(3, scoreDiffPerSec["home"][sec]))
+			aAdjScoreSit = max(-3, min(3, scoreDiffPerSec["away"][sec]))
+
+			# Add the current second to the corresponding set of times
+			scoreSitSecs["home"][hAdjScoreSit].add(sec)
+			scoreSitSecs["away"][aAdjScoreSit].add(sec)
+
+		#
+		# Record player toi for each score and strength situation
+		#
+
+
+
+
+
 	# In the new events DB table
 	# record event-players like this:
 	# p1, p2, p3, p1Role, p2Role, p3Role (where the roles are read directly from the json)
