@@ -549,6 +549,10 @@ for gameId in gameIds:
 					jRoles["servedby"] = jRoles["drewby"]
 					del jRoles["drewby"]
 
+		jSubtype = None
+		if "secondaryType" in jEv["result"]:
+			jSubtype = jEv["result"]["secondaryType"].lower()
+
 		# Other information to output
 		jId = jEv["about"]["eventIdx"]
 		jCoords = jEv["coordinates"]
@@ -613,6 +617,9 @@ for gameId in gameIds:
 		outEvents[jId]["hZone"] = jHZone
 		outEvents[jId]["roles"] = jRoles
 
+		if jSubtype is not None:
+			outEvents[jId]["subtype"] = jSubtype
+
 		# For goals, the json includes the goal itself in the score situation
 		# But it's more accurate to say that the first goal was scored when it was 0-0
 		if jType == "goal":
@@ -638,9 +645,9 @@ for gameId in gameIds:
 		outEvents[jId]["hSkaterCount"] = jHomeSkaterCount
 		outEvents[jId]["hSkaters"] = jHomeSkaters
 
-		if jAwayGoalie and jAwayGoalie is not None:
+		if jAwayGoalie is not None:
 			outEvents[jId]["aG"] = jAwayGoalie
-		if jHomeGoalie and jHomeGoalie is not None:
+		if jHomeGoalie is not None:
 			outEvents[jId]["hG"] = jHomeGoalie
 
 	#
@@ -1060,8 +1067,7 @@ for gameId in gameIds:
 	# Done looping through each period and processing shifts
 	#
 
-	pprint(outTeams)
-
+	pprint(outEvents)
 
 
 	# In the new events DB table
