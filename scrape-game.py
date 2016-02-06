@@ -124,13 +124,40 @@ for gameId in gameIds:
 		outTeams[iceSit]["playerIds"] = []									# list of playerIds
 
 		teamIceSits[outTeams[iceSit]["abbrev"]] = iceSit
-		
+
+		# Initialize stats
+		for strSit in strengthSits:
+			outTeams[iceSit][strSit] = dict()
+
+			for scSit in scoreSits:
+				outTeams[iceSit][strSit][scSit] = dict()
+
+				outTeams[iceSit][strSit][scSit]["toi"] = 0
+				outTeams[iceSit][strSit][scSit]["foWon"] = 0	# won face-offs
+				outTeams[iceSit][strSit][scSit]["foLost"] = 0	# lost face-offs
+
+				outTeams[iceSit][strSit][scSit]["gf"] = 0
+				outTeams[iceSit][strSit][scSit]["ga"] = 0
+				outTeams[iceSit][strSit][scSit]["sf"] = 0
+				outTeams[iceSit][strSit][scSit]["sa"] = 0
+				outTeams[iceSit][strSit][scSit]["bsf"] = 0
+				outTeams[iceSit][strSit][scSit]["bsa"] = 0
+				outTeams[iceSit][strSit][scSit]["msf"] = 0
+				outTeams[iceSit][strSit][scSit]["msa"] = 0
+
+				outTeams[iceSit][strSit][scSit]["ofo"] = 0		# offensive zone face-off
+				outTeams[iceSit][strSit][scSit]["dfo"] = 0
+				outTeams[iceSit][strSit][scSit]["nfo"] = 0
+
+				outTeams[iceSit][strSit][scSit]["penTaken"] = 0
+				outTeams[iceSit][strSit][scSit]["penDrawn"] = 0
+
 	# Create a 'playerIds' dictionary that translates team+jersey (used in the pbp html file) to playerIds
 	# Keys: 'home-##' and 'away-##' where ## are jersey numbers
 	# Values: playerIds
 	playerIds = dict()
 	for iceSit in rosters:							# 'iceSit' will be 'home' or 'away'
-		for player in rosters[iceSit]["players"]:		# 'player' will be 'ID#' where # is a playerId
+		for player in rosters[iceSit]["players"]:	# 'player' will be 'ID#' where # is a playerId
 
 			key = iceSit + "-" + rosters[iceSit]["players"][player]["jerseyNumber"]
 			playerIds[key] = int(rosters[iceSit]["players"][player]["person"]["id"])
@@ -165,6 +192,8 @@ for gameId in gameIds:
 				outPlayers[pId][strSit][scSit]["ia1"] = 0		# primary assists
 				outPlayers[pId][strSit][scSit]["ia2"] = 0		# secondary assists
 				outPlayers[pId][strSit][scSit]["blocked"] = 0	# shots that this player blocked
+				outPlayers[pId][strSit][scSit]["foWon"] = 0		# individual won face-offs
+				outPlayers[pId][strSit][scSit]["foLost"] = 0	# individual lost face-offs
 
 				outPlayers[pId][strSit][scSit]["gf"] = 0
 				outPlayers[pId][strSit][scSit]["ga"] = 0
@@ -178,8 +207,6 @@ for gameId in gameIds:
 				outPlayers[pId][strSit][scSit]["ofo"] = 0		# offensive zone face-off
 				outPlayers[pId][strSit][scSit]["dfo"] = 0
 				outPlayers[pId][strSit][scSit]["nfo"] = 0
-				outPlayers[pId][strSit][scSit]["foWon"] = 0		# individual won face-offs
-				outPlayers[pId][strSit][scSit]["foLost"] = 0	# individual lost face-offs
 
 				outPlayers[pId][strSit][scSit]["penTaken"] = 0
 				outPlayers[pId][strSit][scSit]["penDrawn"] = 0
@@ -632,7 +659,7 @@ for gameId in gameIds:
 
 	#
 	#
-	# Loop through events and increment players' stats
+	# Loop through events and increment players' stats and teams' stats
 	#
 	#
 
@@ -752,7 +779,7 @@ for gameId in gameIds:
 					elif evTeam == outTeams["away"]["abbrev"]:
 						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["bsa"] += 1
 				elif evType == "faceoff":
-					# For face-offs, we don't care who won (the evTeam) - we're just tracking how many o/d/n FOs the player was on the ice for
+					# For face-off zone counts, we don't care who won (the evTeam) - we're just tracking how many o/d/n FOs the player was on the ice for
 					evHZone = outEvents[ev]["hZone"]
 					outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]][evHZone + "fo"] += 1
 
@@ -786,14 +813,71 @@ for gameId in gameIds:
 					elif evTeam == outTeams["home"]["abbrev"]:
 						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["bsa"] += 1
 				elif evType == "faceoff":
-					# For face-offs, we don't care who won (the evTeam) - we're just tracking how many o/d/n FOs the player was on the ice for
+					# For face-off zone counts, we don't care who won (the evTeam) - we're just tracking how many o/d/n FOs the player was on the ice for
 					# Since outEvents[ev]["hZone"] is always from the home-team's perspective, we need to flip the o-zone and d-zone for the away-team
-					evAZone = "n" 
+					evAZone = outEvents[ev]["hZone"]
 					if outEvents[ev]["hZone"] == "o":
 						evAZone = "d"
 					elif outEvents[ev]["hZone"] == "d":
 						evAZone = "o"
 					outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]][evAZone + "fo"] += 1
+
+			#
+			# Increment stats for teams
+			#
+
+			if evType == "goal":
+				if evTeam == outTeams["home"]["abbrev"]:
+					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["gf"] += 1
+					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
+					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["ga"] += 1
+					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["sa"] += 1
+				elif evTeam == outTeams["away"]["abbrev"]:
+					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["gf"] += 1
+					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
+					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["ga"] += 1
+					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["sa"] += 1
+			elif evType == "shot":
+				if evTeam == outTeams["home"]["abbrev"]:
+					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
+					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["sa"] += 1
+				elif evTeam == outTeams["away"]["abbrev"]:
+					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
+					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["sa"] += 1
+			elif evType == "missed_shot":
+				if evTeam == outTeams["home"]["abbrev"]:
+					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["msf"] += 1
+					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["msa"] += 1
+				elif evTeam == outTeams["away"]["abbrev"]:
+					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["msf"] += 1
+					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["msa"] += 1
+			elif evType == "blocked_shot":
+				if evTeam == outTeams["home"]["abbrev"]:
+					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["bsf"] += 1
+					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["bsa"] += 1
+				elif evTeam == outTeams["away"]["abbrev"]:
+					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["bsf"] += 1
+					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["bsa"] += 1
+			elif evType == "faceoff":
+				# Increment o/d/n faceoffs for the home team
+				evHZone = outEvents[ev]["hZone"]
+				outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]][evHZone + "fo"] += 1
+
+				# Increment o/d/n faceoffs for the away team
+				evAZone = outEvents[ev]["hZone"]
+				if outEvents[ev]["hZone"] == "o":
+					evAZone = "d"
+				elif outEvents[ev]["hZone"] == "d":
+					evAZone = "o"
+				outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]][evAZone + "fo"] += 1
+
+				# Increment foWon/foLost counts
+				if evTeam == outTeams["home"]["abbrev"]:
+					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["foWon"] += 1
+					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["foLost"] += 1
+				elif evTeam == outTeams["away"]["abbrev"]:
+					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["foWon"] += 1
+					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["foLost"] += 1
 
 	#
 	# Done looping through outEvents to record player stats
@@ -1003,7 +1087,7 @@ for gameId in gameIds:
 			scoreSitSecs["away"][aAdjScoreSit].add(sec)
 
 		#
-		# Record player toi for each score and strength situation
+		# Increment player toi for each score and strength situation
 		#
 
 		for pId in nestedShifts:
@@ -1033,13 +1117,34 @@ for gameId in gameIds:
 						outPlayers[pId]["ev4"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev4Secs, scoreSitSecs["home"][scoreSit]))
 						outPlayers[pId]["ev3"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev3Secs, scoreSitSecs["home"][scoreSit]))
 
+		#
+		# Increment team toi for each score and strength situation
+		#
+
+		for period in range(1, maxPeriod + 1):
+			for scoreSit in range(-3, 4):
+
+				# Increment HOME team tois
+				outTeams["home"]["ownGPulled"][scoreSit]["toi"] += len(set.intersection(ownGPulledSecs["home"], scoreSitSecs["home"][scoreSit]))
+				outTeams["home"]["oppGPulled"][scoreSit]["toi"] += len(set.intersection(ownGPulledSecs["away"], scoreSitSecs["home"][scoreSit]))
+				outTeams["home"]["pp"][scoreSit]["toi"] += len(set.intersection(ppSecs["home"], scoreSitSecs["home"][scoreSit]))
+				outTeams["home"]["pk"][scoreSit]["toi"] += len(set.intersection(pkSecs["home"], scoreSitSecs["home"][scoreSit]))
+				outTeams["home"]["ev5"][scoreSit]["toi"] += len(set.intersection(ev5Secs, scoreSitSecs["home"][scoreSit]))
+				outTeams["home"]["ev4"][scoreSit]["toi"] += len(set.intersection(ev4Secs, scoreSitSecs["home"][scoreSit]))
+				outTeams["home"]["ev3"][scoreSit]["toi"] += len(set.intersection(ev3Secs, scoreSitSecs["home"][scoreSit]))
+
+				# Increment AWAY team tois
+				outTeams["away"]["ownGPulled"][scoreSit]["toi"] += len(set.intersection(ownGPulledSecs["away"], scoreSitSecs["away"][scoreSit]))
+				outTeams["away"]["oppGPulled"][scoreSit]["toi"] += len(set.intersection(ownGPulledSecs["home"], scoreSitSecs["away"][scoreSit]))
+				outTeams["away"]["pp"][scoreSit]["toi"] += len(set.intersection(ppSecs["away"], scoreSitSecs["away"][scoreSit]))
+				outTeams["away"]["pk"][scoreSit]["toi"] += len(set.intersection(pkSecs["away"], scoreSitSecs["away"][scoreSit]))
+				outTeams["away"]["ev5"][scoreSit]["toi"] += len(set.intersection(ev5Secs, scoreSitSecs["away"][scoreSit]))
+				outTeams["away"]["ev4"][scoreSit]["toi"] += len(set.intersection(ev4Secs, scoreSitSecs["away"][scoreSit]))
+				outTeams["away"]["ev3"][scoreSit]["toi"] += len(set.intersection(ev3Secs, scoreSitSecs["away"][scoreSit]))
 
 	#
 	# Done looping through each period and processing shifts
 	#
-
-	pprint(outEvents)
-
 
 	# In the new events DB table
 	# record event-players like this:
