@@ -112,7 +112,7 @@ for gameId in gameIds:
 	#
 
 	scoreSits = [-3, -2, -1, 0, 1, 2, 3]
-	strengthSits = ["ownGOff", "oppGOff", "pk", "pp", "ev5", "ev4", "ev3"]
+	strengthSits = ["ownGPulled", "oppGPulled", "pk", "pp", "ev5", "ev4", "ev3"]
 	
 	teamIceSits = dict()	# translates the team abbreviation to 'home' or 'away'
 	outTeams = dict()		# dictionary to store team information for output
@@ -461,6 +461,10 @@ for gameId in gameIds:
 		htmlEvents[htmlId]["hZone"] = evHZone
 
 	#
+	# Done looping through html events
+	#
+
+	#
 	#
 	# Append on-ice skater data to the json event data
 	# Match on period, time, event-type, and event-players/roles
@@ -639,6 +643,10 @@ for gameId in gameIds:
 		if jHomeGoalie and jHomeGoalie is not None:
 			outEvents[jId]["hG"] = jHomeGoalie
 
+	#
+	# Done looping through json events to match events with html events and preparing outEvents
+	#
+
 	# Print unmatched html events
 	for hEv in htmlEvents:
 		if "matched" not in htmlEvents[hEv]:
@@ -668,15 +676,15 @@ for gameId in gameIds:
 			teamStrengthSits = dict()	# Returns the strength situation from the key-team's perspective
 			oppStrengthSits = dict()	# Returns the strength situation from the key-team's opponent perspective
 			if "aG" not in outEvents[ev] or outEvents[ev]["aG"] is None:
-				teamStrengthSits[outTeams["away"]["abbrev"]] = "ownGOff"
-				teamStrengthSits[outTeams["home"]["abbrev"]] = "oppGOff"
-				oppStrengthSits[outTeams["away"]["abbrev"]] = "oppGOff"
-				oppStrengthSits[outTeams["home"]["abbrev"]] = "ownGOff"
+				teamStrengthSits[outTeams["away"]["abbrev"]] = "ownGPulled"
+				teamStrengthSits[outTeams["home"]["abbrev"]] = "oppGPulled"
+				oppStrengthSits[outTeams["away"]["abbrev"]] = "oppGPulled"
+				oppStrengthSits[outTeams["home"]["abbrev"]] = "ownGPulled"
 			elif "hG" not in outEvents[ev] or outEvents[ev]["hG"] is None:
-				teamStrengthSits[outTeams["away"]["abbrev"]] = "oppGOff"
-				teamStrengthSits[outTeams["home"]["abbrev"]] = "ownGOff"
-				oppStrengthSits[outTeams["away"]["abbrev"]] = "ownGOff"
-				oppStrengthSits[outTeams["home"]["abbrev"]] = "oppGOff"
+				teamStrengthSits[outTeams["away"]["abbrev"]] = "oppGPulled"
+				teamStrengthSits[outTeams["home"]["abbrev"]] = "ownGPulled"
+				oppStrengthSits[outTeams["away"]["abbrev"]] = "ownGPulled"
+				oppStrengthSits[outTeams["home"]["abbrev"]] = "oppGPulled"
 			elif outEvents[ev]["aSkaterCount"] - outEvents[ev]["hSkaterCount"] > 0:
 				teamStrengthSits[outTeams["away"]["abbrev"]] = "pp"
 				teamStrengthSits[outTeams["home"]["abbrev"]] = "pk"
@@ -810,6 +818,10 @@ for gameId in gameIds:
 					outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]][evAZone + "fo"] += 1
 
 	#
+	# Done looping through outEvents to record player stats
+	#
+
+	#
 	#
 	# Process shift json
 	#
@@ -891,12 +903,6 @@ for gameId in gameIds:
 	#
 
 	for period in range(1, maxPeriod + 1):
-
-		#
-		# Skip shootout in regular season
-		#
-		if (gameId < 30000 and period >= 5):
-			continue
 
 		#
 		# Record the number of goalies and skaters on the ice at each second (the list index represents the number of seconds elapsed)
@@ -1022,10 +1028,46 @@ for gameId in gameIds:
 		# Record player toi for each score and strength situation
 		#
 
+		for pId in nestedShifts:
+			for period in range(1, maxPeriod + 1):
 
+				# Convert each player's list of times when they were on the ice to a set, so that we can use intersections
+				nestedShifts[pId][period] = set(nestedShifts[pId][period])
+
+				if nestedShifts[pId]["team"] == outTeams["away"]["abbrev"]:	# Record tois for players on the AWAY team
+					# For each score situation, increment tois for each strength situation (increment because we're adding this period's toi to previous periods' tois)
+					for scoreSit in range(-3, 4):
+						outPlayers[pId]["ownGPulled"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ownGPulledSecs["away"], scoreSitSecs["away"][scoreSit]))
+						outPlayers[pId]["oppGPulled"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ownGPulledSecs["home"], scoreSitSecs["away"][scoreSit]))
+						outPlayers[pId]["pp"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ppSecs["away"], scoreSitSecs["away"][scoreSit]))
+						outPlayers[pId]["pk"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], pkSecs["away"], scoreSitSecs["away"][scoreSit]))
+						outPlayers[pId]["ev5"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev5Secs, scoreSitSecs["away"][scoreSit]))
+						outPlayers[pId]["ev4"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev4Secs, scoreSitSecs["away"][scoreSit]))
+						outPlayers[pId]["ev3"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev3Secs, scoreSitSecs["away"][scoreSit]))
+
+				elif nestedShifts[pId]["team"] == outTeams["away"]["abbrev"]:	# Record tois for players on the HOME team
+					for scoreSit in range(-3, 4):
+						outPlayers[pId]["ownGPulled"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ownGPulledSecs["home"], scoreSitSecs["home"][scoreSit]))
+						outPlayers[pId]["oppGPulled"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ownGPulledSecs["away"], scoreSitSecs["home"][scoreSit]))
+						outPlayers[pId]["pp"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ppSecs["home"], scoreSitSecs["home"][scoreSit]))
+						outPlayers[pId]["pk"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], pkSecs["home"], scoreSitSecs["home"][scoreSit]))
+						outPlayers[pId]["ev5"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev5Secs, scoreSitSecs["home"][scoreSit]))
+						outPlayers[pId]["ev4"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev4Secs, scoreSitSecs["home"][scoreSit]))
+						outPlayers[pId]["ev3"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev3Secs, scoreSitSecs["home"][scoreSit]))
+
+
+	#
+	# Done looping through each period and processing shifts
+	#
+
+	pprint(outTeams)
 
 
 
 	# In the new events DB table
 	# record event-players like this:
 	# p1, p2, p3, p1Role, p2Role, p3Role (where the roles are read directly from the json)
+
+#
+# Done looping through each gameId
+#
