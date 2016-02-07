@@ -13,6 +13,15 @@ def toSecs(timeStr):
 	ss = int(timeStr[timeStr.find(":")+1:])
 	return 60 * mm + ss
 
+# Check if the key k is in the dictionary d
+# If it isn't, return NULL
+# If it exists, return the key's value as a string
+def outputVal(d, k):
+	if k not in d:
+		return "NULL"
+	else:
+		return str(d[k])
+
 #
 # 
 # Get user arguments
@@ -623,10 +632,16 @@ for gameId in gameIds:
 					if htmlEvents[hEv]["team"] is not None:
 						outEvents[jId]["team"] = htmlEvents[hEv]["team"]
 
+						# Record the iceSit (home/away)
+						if outEvents[jId]["team"] == outTeams["home"]["abbrev"]:
+							outEvents[jId]["iceSit"] = "home"
+						elif outEvents[jId]["team"] == outTeams["away"]["abbrev"]:
+							outEvents[jId]["iceSit"] = "away"
+
 					if "awayGoalie" in htmlEvents[hEv]:
-						jAwayGoalie = htmlEvents[hEv]["awayGoalie"]
+						outEvents[jId]["awayG"] = htmlEvents[hEv]["awayGoalie"]
 					if "homeGoalie" in htmlEvents[hEv]:
-						jHomeGoalie = htmlEvents[hEv]["homeGoalie"]
+						outEvents[jId]["homeG"] = htmlEvents[hEv]["homeGoalie"]
 
 					# Create a "matched" flag to check results
 					htmlEvents[hEv]["matched"] = "matched"
@@ -1146,9 +1161,155 @@ for gameId in gameIds:
 	# Done looping through each period and processing shifts
 	#
 
-	# In the new events DB table
-	# record event-players like this:
-	# p1, p2, p3, p1Role, p2Role, p3Role (where the roles are read directly from the json)
+	#
+	#
+	# Prepare output files that will be loaded into the database
+	#
+	#
+
+	#
+	# Output shifts
+	#
+
+	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-shifts.csv", "w")
+	outString = "season,date,gameId,team,iceSit,playerId,position,period,start,end\n"
+	outFile.write(outString)
+
+	for sh in shifts:
+		outString = str(seasonArg)
+		outString += "," + str(gameDate)
+		outString += "," + str(gameId)
+		outString += "," + nestedShifts[sh["playerId"]]["team"]
+		outString += "," + nestedShifts[sh["playerId"]]["iceSit"]
+		outString += "," + str(sh["playerId"])
+		outString += "," + nestedShifts[sh["playerId"]]["position"]
+		outString += "," + str(sh["period"])
+		outString += "," + str(toSecs(sh["startTime"]))
+		outString += "," + str(toSecs(sh["endTime"]))
+		outString += "\n"
+		outFile.write(outString)
+
+	outFile.close()
+
+	#
+	# Output events
+	#
+
+	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-events.csv", "w")
+	outString = "season,date,gameId,eventId,"
+	outString += "period,time,aScore,hScore,aSkaters,hSkaters,locX,locY,"
+	outString += "desc,type,subtype,"
+	outString += "team,teamIceSit,"	# team is the event team; teamIceSit is home/away for the event team
+	outString += "p1,p2,p3,p1Role,p2Role,p3Role,"
+	outString += "as1,as2,as3,as4,as5,as6,ag,"
+	outString += "hs1,hs2,hs3,hs4,hs5,hs6,hg\n"
+	outFile.write(outString)
+
+	#pprint(outEvents)
+
+	for ev in outEvents:
+
+		outString = str(seasonArg)
+		outString += "," + str(gameDate)
+		outString += "," + str(gameId)
+		outString += "," + str(ev)
+
+		outString += "," + str(outEvents[ev]["period"])
+		outString += "," + str(outEvents[ev]["time"])
+		outString += "," + str(outEvents[ev]["aScore"])
+		outString += "," + str(outEvents[ev]["hScore"])
+		outString += "," + outputVal(outEvents[ev], "aSkaterCount")
+		outString += "," + outputVal(outEvents[ev], "hSkaterCount")
+		outString += "," + outputVal(outEvents[ev], "locX")
+		outString += "," + outputVal(outEvents[ev], "locY")
+
+		outString += "," + outEvents[ev]["description"].replace(",", ";") # Replace commas to maintain the csv structure
+		outString += "," + outEvents[ev]["type"]
+		outString += "," + outputVal(outEvents[ev], "subtype")
+
+		outString += "," + outputVal(outEvents[ev], "team")
+		outString += "," + outputVal(outEvents[ev], "iceSit")
+
+		#
+		# Process roles
+		#
+
+		if "roles" not in outEvents[ev]:
+			outString += ",NULL,NULL,NULL,NULL,NULL,NULL"
+		else:
+			pIdString = ""
+			roleString = ""
+
+			# Append playerIds and roles
+			roleCount = 0
+			for role in outEvents[ev]["roles"]:
+				pIdString += "," + str(outEvents[ev]["roles"][role])
+				roleString += "," + role
+				roleCount += 1
+			# If there are less than 3 playerIds, pad the shortage with NULLs
+			while roleCount < 3:
+				pIdString += ",NULL"
+				roleString += ",NULL"
+				roleCount += 1
+			# Add the playerIds and roles to the output
+			outString += pIdString + roleString
+
+		#
+		# Append on-ice playerIds
+		#
+
+		# AWAY SKATERS
+		pIdString = ""
+		if "aSkaters" not in outEvents[ev]:
+			outString += ",NULL,NULL,NULL,NULL,NULL,NULL"
+		else:
+			# Append playerIds
+			count = 0
+			for pId in outEvents[ev]["aSkaters"]:
+				pIdString += "," + str(pId)
+				count += 1
+			# If there are less than 6 skater playerIds, pad the shortage with NULLs
+			while count < 6:
+				pIdString += ",NULL"
+				count += 1
+		outString += pIdString
+
+		# AWAY GOALIE
+		outString += "," + outputVal(outEvents[ev], "awayG")
+
+		# HOME SKATERS
+		pIdString = ""
+		if "hSkaters" not in outEvents[ev]:
+			outString += ",NULL,NULL,NULL,NULL,NULL,NULL"
+		else:
+			# Append playerIds
+			count = 0
+			for pId in outEvents[ev]["hSkaters"]:
+				pIdString += "," + str(pId)
+				count += 1
+			# If there are less than 6 skater playerIds, pad the shortage with NULLs
+			while count < 6:
+				pIdString += ",NULL"
+				count += 1
+		outString += pIdString
+
+		# HOME GOALIE
+		outString += "," + outputVal(outEvents[ev], "homeG")
+
+		outString += "\n"
+		outFile.write(outString)
+
+	outFile.close()
+
+	#
+	# Output teams
+	#
+
+
+	#
+	# Output players
+	#
+
 
 #
 # Done looping through each gameId
