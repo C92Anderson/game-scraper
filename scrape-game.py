@@ -262,7 +262,19 @@ for gameId in gameIds:
 		htmlEvents[htmlId]["desc"] = evDesc
 
 		# Get the team that TOOK the shot, MADE the hit, or WON the faceoff, etc.
+		# The json team abbreviations are different from the html ones:
+		# N.J (html) -> NJD (json); S.J -> SJS; T.B -> TBL; L.A -> LAK
+
 		evTeam = evDesc[0:evDesc.find(" ")].lower()
+		if evTeam == "n.j":
+			evTeam = "njd"
+		elif evTeam == "s.j":
+			evTeam = "sjs"
+		elif evTeam == "t.b":
+			evTeam = "tbl"
+		elif evTeam == "l.a":
+			evTeam = "lak"
+
 		if evTeam not in [outTeams["away"]["abbrev"], outTeams["home"]["abbrev"]]:
 			evTeam = None
 		htmlEvents[htmlId]["team"] = evTeam
