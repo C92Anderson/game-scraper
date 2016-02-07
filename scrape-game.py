@@ -22,6 +22,20 @@ def outputVal(d, k):
 	else:
 		return str(d[k])
 
+# The json team abbreviations are different from the html ones:
+# N.J (html) -> NJD (json); S.J -> SJS; T.B -> TBL; L.A -> LAK
+def useNewTeamAbbrev(abbrev):
+	if abbrev == "n.j":
+		return "njd"
+	elif abbrev == "s.j":
+		return "sjs"
+	elif abbrev == "t.b":
+		return "tbl"
+	elif abbrev == "l.a":
+		return "lak"
+	else:
+		return abbrev
+
 #
 # 
 # Get user arguments
@@ -262,18 +276,8 @@ for gameId in gameIds:
 		htmlEvents[htmlId]["desc"] = evDesc
 
 		# Get the team that TOOK the shot, MADE the hit, or WON the faceoff, etc.
-		# The json team abbreviations are different from the html ones:
-		# N.J (html) -> NJD (json); S.J -> SJS; T.B -> TBL; L.A -> LAK
-
 		evTeam = evDesc[0:evDesc.find(" ")].lower()
-		if evTeam == "n.j":
-			evTeam = "njd"
-		elif evTeam == "s.j":
-			evTeam = "sjs"
-		elif evTeam == "t.b":
-			evTeam = "tbl"
-		elif evTeam == "l.a":
-			evTeam = "lak"
+		evTeam = useNewTeamAbbrev(evTeam)
 
 		if evTeam not in [outTeams["away"]["abbrev"], outTeams["home"]["abbrev"]]:
 			evTeam = None
@@ -538,8 +542,9 @@ for gameId in gameIds:
 	evTypes["pstr"] = "period_start"
 	evTypes["pend"] = "period_end"
 	evTypes["gend"] = "game_end"
-	evTypes["chl"] = ""				# league challenge - challenges don't look like they're captured in the json
-
+	evTypes["soc"] = "shootout_complete"
+	evTypes["chl"] = ""				# league challenge - these don't look like they're captured in the json
+	
 	for jEv in events:
 
 		# Create a dictionary for this event
@@ -692,6 +697,11 @@ for gameId in gameIds:
 	#
 
 	for ev in outEvents:
+
+		# Don't increment stats for events in regular season shoot-outs
+		if gameId < 30000 and outEvents[ev]["period"] >= 5:
+			continue
+
 		if outEvents[ev]["type"] in ["goal", "shot", "missed_shot", "blocked_shot", "faceoff", "penalty"]:
 
 			#
