@@ -85,6 +85,7 @@ for gameId in gameIds:
 			urllib.urlretrieve(fileUrls[i], inDir + filename)
 		else:
 			print str(filename) + " already exists"
+	print "-----"
 
 	#
 	#
@@ -447,8 +448,8 @@ for gameId in gameIds:
 		tds = r.find_all("td", class_=re.compile("bborder")) 
 		onIce = [tds[6], tds[7]]
 
-		htmlEvents[htmlId]["awaySkaters"] = []
-		htmlEvents[htmlId]["homeSkaters"] = []
+		htmlEvents[htmlId]["aSkaters"] = []
+		htmlEvents[htmlId]["hSkaters"] = []
 
 		for i, td in enumerate(onIce):
 
@@ -463,9 +464,9 @@ for gameId in gameIds:
 				position = player["title"][0:player["title"].find(" - ")].lower()
 				playerId = playerIds[onIceTeam + "-" + player.text]
 				if position in ["right wing", "left wing", "center", "defense"]:
-					htmlEvents[htmlId][onIceTeam + "Skaters"].append(playerId)
+					htmlEvents[htmlId][onIceTeam[0] + "Skaters"].append(playerId)
 				elif position == "goalie":
-					htmlEvents[htmlId][onIceTeam + "Goalie"] = playerId
+					htmlEvents[htmlId][onIceTeam[0] + "G"] = playerId
 
 		#
 		# Get the zone in which the event occurred - always use the home team's perspective
@@ -621,10 +622,10 @@ for gameId in gameIds:
 					and htmlEvents[hEv]["roles"] == jRoles):
 
 					found = True
-					outEvents[jId]["aSkaterCount"] = len(htmlEvents[hEv]["awaySkaters"])
-					outEvents[jId]["hSkaterCount"] = len(htmlEvents[hEv]["homeSkaters"])
-					outEvents[jId]["aSkaters"] = htmlEvents[hEv]["awaySkaters"]
-					outEvents[jId]["hSkaters"] = htmlEvents[hEv]["homeSkaters"]
+					outEvents[jId]["aSkaterCount"] = len(htmlEvents[hEv]["aSkaters"])
+					outEvents[jId]["hSkaterCount"] = len(htmlEvents[hEv]["hSkaters"])
+					outEvents[jId]["aSkaters"] = htmlEvents[hEv]["aSkaters"]
+					outEvents[jId]["hSkaters"] = htmlEvents[hEv]["hSkaters"]
 
 					if htmlEvents[hEv]["hZone"] is not None:
 						outEvents[jId]["hZone"] = htmlEvents[hEv]["hZone"]
@@ -638,10 +639,10 @@ for gameId in gameIds:
 						elif outEvents[jId]["team"] == outTeams["away"]["abbrev"]:
 							outEvents[jId]["iceSit"] = "away"
 
-					if "awayGoalie" in htmlEvents[hEv]:
-						outEvents[jId]["awayG"] = htmlEvents[hEv]["awayGoalie"]
-					if "homeGoalie" in htmlEvents[hEv]:
-						outEvents[jId]["homeG"] = htmlEvents[hEv]["homeGoalie"]
+					if "aG" in htmlEvents[hEv]:
+						outEvents[jId]["aG"] = htmlEvents[hEv]["aG"]
+					if "hG" in htmlEvents[hEv]:
+						outEvents[jId]["hG"] = htmlEvents[hEv]["hG"]
 
 					# Create a "matched" flag to check results
 					htmlEvents[hEv]["matched"] = "matched"
@@ -695,12 +696,16 @@ for gameId in gameIds:
 
 			teamStrengthSits = dict()	# Returns the strength situation from the key-team's perspective
 			oppStrengthSits = dict()	# Returns the strength situation from the key-team's opponent perspective
-			if "aG" not in outEvents[ev] or outEvents[ev]["aG"] is None:
+
+
+			if "aG" not in outEvents[ev]:
+				pprint(outEvents[ev])
 				teamStrengthSits[outTeams["away"]["abbrev"]] = "ownGPulled"
 				teamStrengthSits[outTeams["home"]["abbrev"]] = "oppGPulled"
 				oppStrengthSits[outTeams["away"]["abbrev"]] = "oppGPulled"
 				oppStrengthSits[outTeams["home"]["abbrev"]] = "ownGPulled"
-			elif "hG" not in outEvents[ev] or outEvents[ev]["hG"] is None:
+			elif "hG" not in outEvents[ev]:
+				pprint(outEvents[ev])
 				teamStrengthSits[outTeams["away"]["abbrev"]] = "oppGPulled"
 				teamStrengthSits[outTeams["home"]["abbrev"]] = "ownGPulled"
 				oppStrengthSits[outTeams["away"]["abbrev"]] = "ownGPulled"
@@ -1174,6 +1179,9 @@ for gameId in gameIds:
 	#
 	#
 
+	print "-----"
+	print "Preparing csv files"
+
 	#
 	# Output shifts
 	#
@@ -1209,8 +1217,6 @@ for gameId in gameIds:
 	outString += "as1,as2,as3,as4,as5,as6,ag,"
 	outString += "hs1,hs2,hs3,hs4,hs5,hs6,hg\n"
 	outFile.write(outString)
-
-	#pprint(outEvents)
 
 	for ev in outEvents:
 
@@ -1280,7 +1286,7 @@ for gameId in gameIds:
 		outString += pIdString
 
 		# AWAY GOALIE
-		outString += "," + outputVal(outEvents[ev], "awayG")
+		outString += "," + outputVal(outEvents[ev], "aG")
 
 		# HOME SKATERS
 		pIdString = ""
@@ -1299,7 +1305,7 @@ for gameId in gameIds:
 		outString += pIdString
 
 		# HOME GOALIE
-		outString += "," + outputVal(outEvents[ev], "homeG")
+		outString += "," + outputVal(outEvents[ev], "hG")
 
 		outString += "\n"
 		outFile.write(outString)
@@ -1424,7 +1430,7 @@ for gameId in gameIds:
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-rosters.csv", "w")
 	outString = "season,date,gameId,team,teamIceSit,playerId,firstName,lastName,jersey,position\n"
 	outFile.write(outString)
-	
+
 	for pId in outPlayers:
 
 		outString = str(seasonArg)
