@@ -687,12 +687,12 @@ for gameId in gameIds:
 			#
 			
 			teamScoreSits = dict()	# Returns the score situation from the key-team's perspective
-			teamScoreSits[outTeams["away"]["abbrev"]] = outEvents[ev]["aScore"] - outEvents[ev]["hScore"]
-			teamScoreSits[outTeams["home"]["abbrev"]] = outEvents[ev]["hScore"] - outEvents[ev]["aScore"]
+			teamScoreSits[outTeams["away"]["abbrev"]] = max(-3, min(3, outEvents[ev]["aScore"] - outEvents[ev]["hScore"]))
+			teamScoreSits[outTeams["home"]["abbrev"]] = max(-3, min(3, outEvents[ev]["hScore"] - outEvents[ev]["aScore"]))
 
 			oppScoreSits = dict()	# Returns the score situation from the key-team's opponent perspective
-			oppScoreSits[outTeams["away"]["abbrev"]] = outEvents[ev]["hScore"] - outEvents[ev]["aScore"]
-			oppScoreSits[outTeams["home"]["abbrev"]] = outEvents[ev]["aScore"] - outEvents[ev]["hScore"]
+			oppScoreSits[outTeams["away"]["abbrev"]] = max(-3, min(3, outEvents[ev]["hScore"] - outEvents[ev]["aScore"]))
+			oppScoreSits[outTeams["home"]["abbrev"]] = max(-3, min(3, outEvents[ev]["aScore"] - outEvents[ev]["hScore"]))
 
 			teamStrengthSits = dict()	# Returns the strength situation from the key-team's perspective
 			oppStrengthSits = dict()	# Returns the strength situation from the key-team's opponent perspective
