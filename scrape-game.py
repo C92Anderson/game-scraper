@@ -1,3 +1,4 @@
+# For scraping and processing raw data, and creating csv
 import sys
 import urllib
 import os.path
@@ -6,6 +7,10 @@ import copy
 import re
 from pprint import pprint
 from bs4 import BeautifulSoup
+
+# For loading csv files into database
+import mysql.connector
+import dbconfig
 
 # Take string "mm:ss" and return the number of seconds (as an integer)
 def toSecs(timeStr):
@@ -648,6 +653,11 @@ for gameId in gameIds:
 						outEvents[jId]["hZone"] = htmlEvents[hEv]["hZone"]
 
 					if htmlEvents[hEv]["team"] is not None:
+
+						# Although the json event contains the event team, there are some differences
+						# 	e.g., the json attributes blocked shots to the blocker team; the html attributes it to the shooter team
+						# Also, we've already done a spot check to validate the html event team
+						#	because we used the event team + jersey numbers in the event description to translate the jersey numbers to playerIds
 						outEvents[jId]["team"] = htmlEvents[hEv]["team"]
 
 						# Record the iceSit (home/away)
@@ -1231,8 +1241,8 @@ for gameId in gameIds:
 	outString += "desc,type,subtype,"
 	outString += "team,teamIceSit,"	# team is the event team; teamIceSit is home/away for the event team
 	outString += "p1,p2,p3,p1Role,p2Role,p3Role,"
-	outString += "as1,as2,as3,as4,as5,as6,ag,"
-	outString += "hs1,hs2,hs3,hs4,hs5,hs6,hg\n"
+	outString += "aS1,aS2,aS3,aS4,aS5,aS6,aG,"
+	outString += "hS1,hS2,hS3,hS4,hS5,hS6,hG\n"
 	outFile.write(outString)
 
 	for ev in outEvents:
@@ -1475,7 +1485,36 @@ for gameId in gameIds:
 
 	outFile.close()
 
+	#
+	#
+	# Load csv files into database
+	#
+	#
 
+	print "-----"
+
+	# Connect to database
+	databaseUser = dbconfig.user
+	databasePasswd = dbconfig.passwd
+	databaseHost = dbconfig.host
+	database = dbconfig.database
+	connection = mysql.connector.connect(user=databaseUser, passwd=databasePasswd, host=databaseHost, database=database)
+	cursor = connection.cursor()
+
+	# Load CSV into database
+	fileToLoad = outDir + str(seasonArg) + "-" + str(gameId) + "-events.csv"
+	query = ("LOAD DATA LOCAL INFILE '" + fileToLoad + "' INTO TABLE game_events"
+		+ " FIELDS TERMINATED BY ',' ENCLOSED BY '\"'"
+		+ " LINES TERMINATED BY '\\n'"
+		+ " IGNORE 1 LINES")
+	print "Loading " + fileToLoad + " into database"
+	cursor.execute(query)
+
+	# Close connection
+	cursor.close()
+	connection.close()
+
+	print "Done processing game " + str(gameId)
 
 #
 # Done looping through each gameId
