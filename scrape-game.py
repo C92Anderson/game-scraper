@@ -1310,11 +1310,148 @@ for gameId in gameIds:
 	# Output team stats
 	#
 
+	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-teams.csv", "w")
+	outString = "season,date,gameId,team,iceSit,strengthSit,scoreSit,"
+	outString += "toi,"
+	outString += "gf,ga,sf,sa,bsf,bsa,msf,msa,"
+	outString += "foWon,foLost,ofo,dfo,nfo,"
+	outString += "penTaken,penDrawn"
+	outString += "\n"
+	outFile.write(outString)
 
+	for iceSit in outTeams:
+		for strSit in strengthSits:	# Can't use "strSit in outTeam[iceSit]" because outTeams[iceSit] has additional keys: abbrev, playerIds
+			for scSit in outTeams[iceSit][strSit]:
+				outString = str(seasonArg)
+				outString += "," + str(gameDate)
+				outString += "," + str(gameId)
+				outString += "," + outTeams[iceSit]["abbrev"]
+				outString += "," + iceSit
+				outString += "," + strSit
+				outString += "," + str(scSit)
+
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["toi"])
+
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["gf"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["ga"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["sf"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["sa"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["bsf"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["bsa"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["msf"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["msa"])
+
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["foWon"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["foLost"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["ofo"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["dfo"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["nfo"])
+
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["penTaken"])
+				outString += "," + str(outTeams[iceSit][strSit][scSit]["penDrawn"])
+
+				outString += "\n"
+				outFile.write(outString)
+
+	outFile.close()
 
 	#
-	# Output players
+	# Output player stats
 	#
+
+	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-players.csv", "w")
+	outString = "season,date,gameId,team,playerId,strengthSit,scoreSit,"
+	outString += "toi,ig,is,ibs,ims,ia1,ia2,blocked,"
+	outString += "gf,ga,sf,sa,bsf,bsa,msf,msa,"
+	outString += "foWon,foLost,ofo,dfo,nfo,"
+	outString += "penTaken,penDrawn"
+	outString += "\n"
+	outFile.write(outString)
+
+	for pId in outPlayers:
+		for strSit in strengthSits:	# Can't use "strSit in outTeam[iceSit]" because outTeams[iceSit] has additional keys: firstname, lastname, position
+			for scSit in outPlayers[pId][strSit]:
+				outString = str(seasonArg)
+				outString += "," + str(gameDate)
+				outString += "," + str(gameId)
+
+				# Get the player's team
+				if pId in outTeams["home"]["playerIds"]:
+					outString += "," + outTeams["home"]["abbrev"]
+				elif pId in outTeams["away"]["playerIds"]:
+					outString += "," + outTeams["away"]["abbrev"]
+
+				outString += "," + str(pId)
+				outString += "," + strSit
+				outString += "," + str(scSit)
+
+				outString += "," + str(outPlayers[pId][strSit][scSit]["toi"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["ig"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["is"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["ibs"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["ims"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["ia1"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["ia2"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["blocked"])
+
+				outString += "," + str(outPlayers[pId][strSit][scSit]["gf"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["ga"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["sf"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["sa"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["bsf"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["bsa"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["msf"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["msa"])
+
+				outString += "," + str(outPlayers[pId][strSit][scSit]["foWon"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["foLost"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["ofo"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["dfo"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["nfo"])
+
+				outString += "," + str(outPlayers[pId][strSit][scSit]["penTaken"])
+				outString += "," + str(outPlayers[pId][strSit][scSit]["penDrawn"])
+
+				outString += "\n"
+				outFile.write(outString)
+
+	outFile.close()
+
+	#
+	# Output rosters with full player names, etc.?
+	#
+
+	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-rosters.csv", "w")
+	outString = "season,date,gameId,team,teamIceSit,playerId,firstName,lastName,jersey,position\n"
+	outFile.write(outString)
+	
+	for pId in outPlayers:
+
+		outString = str(seasonArg)
+		outString += "," + str(gameDate)
+		outString += "," + str(gameId)
+
+		# Get the player's team and iceSit
+		iceSit = "NULL"
+		if pId in outTeams["home"]["playerIds"]:
+			outString += "," + outTeams["home"]["abbrev"]
+			iceSit = "home"
+		elif pId in outTeams["away"]["playerIds"]:
+			outString += "," + outTeams["away"]["abbrev"]
+			iceSit = "away"
+		outString += "," + iceSit
+
+		outString += "," + str(pId)
+		outString += "," + outPlayers[pId]["firstName"]
+		outString += "," + outPlayers[pId]["lastName"]
+		outString += "," + rosters[iceSit]["players"]["ID" + str(pId)]["jerseyNumber"]
+		outString += "," + outPlayers[pId]["position"]
+
+		outString += "\n"
+		outFile.write(outString)
+
+	outFile.close()
+
 
 
 #
