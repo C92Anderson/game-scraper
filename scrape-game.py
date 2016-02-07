@@ -680,7 +680,8 @@ for gameId in gameIds:
 
 		# Record the home and away scores when the event occurred
 		# For goals, the json includes the goal itself in the score situation, but it's more accurate to say that the first goal was scored when it was 0-0
-		if outEvents[jId]["type"] == "goal":
+		# Don't do this for shootout goals - the json doesn't increment the home and away scores for these
+		if outEvents[jId]["type"] == "goal" and outEvents[jId]["periodType"] != "shootout":
 			if outEvents[jId]["team"] == outTeams["away"]["abbrev"]:
 				outEvents[jId]["aScore"] = jEv["about"]["goals"]["away"] - 1
 				outEvents[jId]["hScore"] = jEv["about"]["goals"]["home"]	
@@ -1237,7 +1238,7 @@ for gameId in gameIds:
 
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-events.csv", "w")
 	outString = "season,date,gameId,eventId,"
-	outString += "period,time,aScore,hScore,aSkaters,hSkaters,locX,locY,"
+	outString += "period,periodType,time,aScore,hScore,aSkaters,hSkaters,locX,locY,"
 	outString += "desc,type,subtype,"
 	outString += "team,teamIceSit,"	# team is the event team; teamIceSit is home/away for the event team
 	outString += "p1,p2,p3,p1Role,p2Role,p3Role,"
@@ -1253,6 +1254,7 @@ for gameId in gameIds:
 		outString += "," + str(ev)
 
 		outString += "," + str(outEvents[ev]["period"])
+		outString += "," + str(outEvents[ev]["periodType"])
 		outString += "," + str(outEvents[ev]["time"])
 		outString += "," + str(outEvents[ev]["aScore"])
 		outString += "," + str(outEvents[ev]["hScore"])
