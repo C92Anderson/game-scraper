@@ -873,6 +873,13 @@ for gameId in gameIds:
 				elif evTeam == outTeams["away"]["abbrev"]:
 					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["bsf"] += 1
 					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["bsa"] += 1
+			elif evType == "penalty":
+				if evTeam == outTeams["home"]["abbrev"]:
+					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["penTaken"] += 1
+					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["penDrawn"] += 1
+				elif evTeam == outTeams["away"]["abbrev"]:
+					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["penTaken"] += 1
+					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["penDrawn"] += 1
 			elif evType == "faceoff":
 				# Increment o/d/n faceoffs for the home team
 				evHZone = outEvents[ev]["hZone"]
@@ -1172,7 +1179,7 @@ for gameId in gameIds:
 	#
 
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-shifts.csv", "w")
-	outString = "season,date,gameId,team,iceSit,playerId,position,period,start,end\n"
+	outString = "season,date,gameId,team,playerId,period,start,end\n"
 	outFile.write(outString)
 
 	for sh in shifts:
@@ -1180,9 +1187,7 @@ for gameId in gameIds:
 		outString += "," + str(gameDate)
 		outString += "," + str(gameId)
 		outString += "," + nestedShifts[sh["playerId"]]["team"]
-		outString += "," + nestedShifts[sh["playerId"]]["iceSit"]
 		outString += "," + str(sh["playerId"])
-		outString += "," + nestedShifts[sh["playerId"]]["position"]
 		outString += "," + str(sh["period"])
 		outString += "," + str(toSecs(sh["startTime"]))
 		outString += "," + str(toSecs(sh["endTime"]))
@@ -1302,8 +1307,9 @@ for gameId in gameIds:
 	outFile.close()
 
 	#
-	# Output teams
+	# Output team stats
 	#
+
 
 
 	#
