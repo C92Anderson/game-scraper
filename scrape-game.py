@@ -123,6 +123,7 @@ for gameId in gameIds:
 	teams = copy.deepcopy(jsonDict["gameData"]["teams"])			# Keys: 'home', 'away'
 	events = copy.deepcopy(jsonDict["liveData"]["plays"]["allPlays"])
 	rosters = copy.deepcopy(jsonDict["liveData"]["boxscore"]["teams"])
+	linescore = copy.deepcopy(jsonDict["liveData"]["linescore"])
 	jsonDict.clear()
 
 	# Reformat the keys in the 'players' dictionary: from 'ID#' to # (as an int), where # is the playerId
@@ -1453,7 +1454,7 @@ for gameId in gameIds:
 	outFile.close()
 
 	#
-	# Output rosters with full player names, etc.?
+	# Output rosters
 	#
 
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-rosters.csv", "w")
@@ -1505,12 +1506,29 @@ for gameId in gameIds:
 
 	# Load CSV into database
 	fileToLoad = outDir + str(seasonArg) + "-" + str(gameId) + "-events.csv"
-	query = ("LOAD DATA LOCAL INFILE '" + fileToLoad + "' INTO TABLE game_events"
+	query = ("LOAD DATA LOCAL INFILE '" + fileToLoad + "'"
+		+ " REPLACE INTO TABLE game_events"
 		+ " FIELDS TERMINATED BY ',' ENCLOSED BY '\"'"
 		+ " LINES TERMINATED BY '\\n'"
 		+ " IGNORE 1 LINES")
 	print "Loading " + fileToLoad + " into database"
 	cursor.execute(query)
+
+	#
+	# Insert game result into database
+	#
+
+	cursor = connection.cursor(prepared=True)
+
+	try:
+		timeRemaining = linescore["currentPeriodTimeRemaining"].lower()
+	except:
+		timeRemaining = linescore["currentPeriodTimeRemaining"]
+
+	query = ("REPLACE INTO game_result (season, date, gameId, aTeam, hTeam, aFinal, hFinal, lastPeriodNumber, lastPeriodName, lastPeriodTimeRemaining)"
+		+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+	args = (seasonArg, gameDate, gameId, outTeams["away"]["abbrev"], outTeams["home"]["abbrev"], linescore["teams"]["away"]["goals"], linescore["teams"]["home"]["goals"], linescore["currentPeriod"], linescore["currentPeriodOrdinal"].lower(), timeRemaining,)
+	cursor.execute(query, args)
 
 	# Close connection
 	cursor.close()
