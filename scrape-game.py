@@ -937,7 +937,7 @@ for gameId in gameIds:
 					evAZone = "d"
 				elif outEvents[ev]["hZone"] == "d":
 					evAZone = "o"
-				outTeams["away"][teamStrengthSits[outTeams["away"]["abbrev"]]][oppScoreSits[outTeams["away"]["abbrev"]]][evAZone + "fo"] += 1
+				outTeams["away"][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]][evAZone + "fo"] += 1
 
 				# Increment foWon/foLost counts
 				if evTeam == outTeams["home"]["abbrev"]:
