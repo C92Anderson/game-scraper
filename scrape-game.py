@@ -507,7 +507,7 @@ for gameId in gameIds:
 			elif evDesc.lower().find("neu. zone") >= 0:
 				evHZone = "n"
 		else: 
-			if evTeam == outTeams["home"]["abbrev"] and evDesc.lower().find("off. zone") >= 0:		# home team created event (excluding blocked shot) in home team's off. zone
+			if evTeam == outTeams["home"]["abbrev"] and evDesc.lower().find("off. zone") >= 0:		# home team created event (excluding blocked shot) in home team's off. zone (incl. winning face off)
 				evHZone = "o"
 			elif evTeam == outTeams["away"]["abbrev"] and evDesc.lower().find("def. zone") >= 0:
 				evHZone = "o"
@@ -842,7 +842,7 @@ for gameId in gameIds:
 				elif evType == "faceoff":
 					# For face-off zone counts, we don't care who won (the evTeam) - we're just tracking how many o/d/n FOs the player was on the ice for
 					evHZone = outEvents[ev]["hZone"]
-					outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]][evHZone + "fo"] += 1
+					outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]][evHZone + "fo"] += 1
 
 			aPlayers = []
 			if "aSkaters" in outEvents[ev]:
@@ -876,12 +876,12 @@ for gameId in gameIds:
 				elif evType == "faceoff":
 					# For face-off zone counts, we don't care who won (the evTeam) - we're just tracking how many o/d/n FOs the player was on the ice for
 					# Since outEvents[ev]["hZone"] is always from the home-team's perspective, we need to flip the o-zone and d-zone for the away-team
-					evAZone = outEvents[ev]["hZone"]
+					evAZone = "n"
 					if outEvents[ev]["hZone"] == "o":
 						evAZone = "d"
 					elif outEvents[ev]["hZone"] == "d":
 						evAZone = "o"
-					outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]][evAZone + "fo"] += 1
+					outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]][evAZone + "fo"] += 1
 
 			#
 			# Increment stats for teams
@@ -929,15 +929,15 @@ for gameId in gameIds:
 			elif evType == "faceoff":
 				# Increment o/d/n faceoffs for the home team
 				evHZone = outEvents[ev]["hZone"]
-				outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]][evHZone + "fo"] += 1
+				outTeams["home"][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]][evHZone + "fo"] += 1
 
 				# Increment o/d/n faceoffs for the away team
-				evAZone = outEvents[ev]["hZone"]
+				evAZone = "n"
 				if outEvents[ev]["hZone"] == "o":
 					evAZone = "d"
 				elif outEvents[ev]["hZone"] == "d":
 					evAZone = "o"
-				outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]][evAZone + "fo"] += 1
+				outTeams["away"][teamStrengthSits[outTeams["away"]["abbrev"]]][oppScoreSits[outTeams["away"]["abbrev"]]][evAZone + "fo"] += 1
 
 				# Increment foWon/foLost counts
 				if evTeam == outTeams["home"]["abbrev"]:
