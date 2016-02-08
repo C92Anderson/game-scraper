@@ -1396,7 +1396,7 @@ for gameId in gameIds:
 	#
 
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-players.csv", "w")
-	outString = "season,date,gameId,team,playerId,strengthSit,scoreSit,"
+	outString = "season,date,gameId,team,iceSit,playerId,strengthSit,scoreSit,"
 	outString += "toi,ig,is,ibs,ims,ia1,ia2,blocked,"
 	outString += "gf,ga,sf,sa,bsf,bsa,msf,msa,"
 	outString += "foWon,foLost,ofo,dfo,nfo,"
@@ -1411,11 +1411,11 @@ for gameId in gameIds:
 				outString += "," + str(gameDate)
 				outString += "," + str(gameId)
 
-				# Get the player's team
+				# Get the player's team and iceSit
 				if pId in outTeams["home"]["playerIds"]:
-					outString += "," + outTeams["home"]["abbrev"]
+					outString += "," + outTeams["home"]["abbrev"] + ",home"
 				elif pId in outTeams["away"]["playerIds"]:
-					outString += "," + outTeams["away"]["abbrev"]
+					outString += "," + outTeams["away"]["abbrev"] + ",away"
 
 				outString += "," + str(pId)
 				outString += "," + strSit
