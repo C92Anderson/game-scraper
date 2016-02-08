@@ -533,6 +533,9 @@ for gameId in gameIds:
 	# Prepare dictionary of events for output
 	outEvents = dict()
 
+	# Create a dictionary to store periodTypes (used when we output the shifts to the shifts csv)
+	periodTypes = dict()
+
 	# Dictionary to map the event types found in the html file --> event types found in the json file
 	evTypes = dict()
 	evTypes["fac"] = "faceoff"
@@ -627,6 +630,13 @@ for gameId in gameIds:
 		#
 		# Done getting player roles
 		#
+
+		#
+		# Record period types
+		#
+
+		if outEvents[jId]["period"] not in periodTypes:
+			periodTypes[outEvents[jId]["period"]] = outEvents[jId]["periodType"] 
 
 		#
 		#
@@ -979,8 +989,6 @@ for gameId in gameIds:
 			# If the playerId doesn't already exist, then create a new dictionary for the player and store some player properties
 			if pId not in nestedShifts:
 				nestedShifts[pId] = dict()
-				nestedShifts[pId]["firstName"] = s["firstName"]
-				nestedShifts[pId]["lastName"] = s["lastName"]
 				nestedShifts[pId]["position"] = outPlayers[pId]["position"]
 				nestedShifts[pId]["team"] = s["teamAbbrev"].lower()
 
@@ -1216,7 +1224,7 @@ for gameId in gameIds:
 	#
 
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-shifts.csv", "w")
-	outString = "season,date,gameId,team,playerId,period,start,end\n"
+	outString = "season,date,gameId,team,iceSit,playerId,period,periodType,start,end\n"
 	outFile.write(outString)
 
 	for sh in shifts:
@@ -1224,8 +1232,10 @@ for gameId in gameIds:
 		outString += "," + str(gameDate)
 		outString += "," + str(gameId)
 		outString += "," + nestedShifts[sh["playerId"]]["team"]
+		outString += "," + nestedShifts[sh["playerId"]]["iceSit"]
 		outString += "," + str(sh["playerId"])
 		outString += "," + str(sh["period"])
+		outString += "," + periodTypes[sh["period"]]
 		outString += "," + str(toSecs(sh["startTime"]))
 		outString += "," + str(toSecs(sh["endTime"]))
 		outString += "\n"
@@ -1458,7 +1468,7 @@ for gameId in gameIds:
 	#
 
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-rosters.csv", "w")
-	outString = "season,date,gameId,team,teamIceSit,playerId,firstName,lastName,jersey,position\n"
+	outString = "season,date,gameId,team,iceSit,playerId,firstName,lastName,jersey,position\n"
 	outFile.write(outString)
 
 	for pId in outPlayers:
@@ -1504,21 +1514,30 @@ for gameId in gameIds:
 	connection = mysql.connector.connect(user=databaseUser, passwd=databasePasswd, host=databaseHost, database=database)
 	cursor = connection.cursor()
 
-	# Load CSV into database
-	fileToLoad = outDir + str(seasonArg) + "-" + str(gameId) + "-events.csv"
-	query = ("LOAD DATA LOCAL INFILE '" + fileToLoad + "'"
-		+ " REPLACE INTO TABLE game_events"
-		+ " FIELDS TERMINATED BY ',' ENCLOSED BY '\"'"
-		+ " LINES TERMINATED BY '\\n'"
-		+ " IGNORE 1 LINES")
-	print "Loading " + fileToLoad + " into database"
-	cursor.execute(query)
+	# Load csv files into database
+	# Use a dictionary to link csv file names (key) with table names (value)
+	filesToLoad = dict()
+	filesToLoad["-events.csv"] = "game_events"
+	filesToLoad["-players.csv"] = "game_player_stats"
+	filesToLoad["-teams.csv"] = "game_team_stats"
+	filesToLoad["-shifts.csv"] = "game_shifts"
+	filesToLoad["-rosters.csv"] = "game_rosters"
+
+	for fileToLoad in filesToLoad:
+		fname = outDir + str(seasonArg) + "-" + str(gameId) + fileToLoad
+		query = ("LOAD DATA LOCAL INFILE '" + fname + "'"
+			+ " REPLACE INTO TABLE " + filesToLoad[fileToLoad]
+			+ " FIELDS TERMINATED BY ',' ENCLOSED BY '\"'"
+			+ " LINES TERMINATED BY '\\n'"
+			+ " IGNORE 1 LINES")
+		print "Loading " + fname + " into database"
+		cursor.execute(query)
 
 	#
-	# Insert game result into database
+	# Insert game result into database using a prepared statement
 	#
 
-	cursor = connection.cursor(prepared=True)
+	cursor = connection.cursor(prepared=True) # Enable support for prepared statements
 
 	try:
 		timeRemaining = linescore["currentPeriodTimeRemaining"].lower()
