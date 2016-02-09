@@ -73,6 +73,9 @@ else:
 
 for gameId in gameIds:
 
+	print "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
+	print "Processing game " + str(gameId)
+
 	# Data we need to record
 	gameDate = 0
 	players = dict()
@@ -104,7 +107,8 @@ for gameId in gameIds:
 			urllib.urlretrieve(fileUrls[i], inDir + filename)
 		else:
 			print str(filename) + " already exists"
-	print "-----"
+
+	print "- - - - -"
 
 	#
 	#
@@ -529,6 +533,8 @@ for gameId in gameIds:
 	# Match on period, time, event-type, and event-players/roles
 	#
 	#
+
+	print "Processing json events"
 
 	# Prepare dictionary of events for output
 	outEvents = dict()
@@ -1216,7 +1222,7 @@ for gameId in gameIds:
 	#
 	#
 
-	print "-----"
+	print "- - - - -"
 	print "Preparing csv files"
 
 	#
@@ -1474,7 +1480,7 @@ for gameId in gameIds:
 	#
 	#
 
-	print "-----"
+	print "- - - - -"
 
 	# Connect to database
 	databaseUser = dbconfig.user
@@ -1524,7 +1530,7 @@ for gameId in gameIds:
 	connection.close()
 
 	print "Done processing game " + str(gameId)
-
+	print "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 #
 # Done looping through each gameId
 #
