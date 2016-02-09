@@ -1232,7 +1232,7 @@ for gameId in gameIds:
 	#
 
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-shifts.csv", "w")
-	outString = "season,date,gameId,team,iceSit,playerId,period,periodType,start,end\n"
+	outString = "season,date,gameId,team,iceSit,playerId,position,period,periodType,start,end\n"
 	outFile.write(outString)
 
 	for sh in shifts:
@@ -1242,6 +1242,7 @@ for gameId in gameIds:
 		outString += "," + nestedShifts[sh["playerId"]]["team"]
 		outString += "," + nestedShifts[sh["playerId"]]["iceSit"]
 		outString += "," + str(sh["playerId"])
+		outString += "," + nestedShifts[pId]["position"]
 		outString += "," + str(sh["period"])
 		outString += "," + periodTypes[sh["period"]]
 		outString += "," + str(toSecs(sh["startTime"]))
@@ -1404,7 +1405,7 @@ for gameId in gameIds:
 	stats = ["toi", "ig", "is", "ibs", "ims", "ia1", "ia2", "blocked", "gf", "ga", "sf", "sa", "bsf", "bsa", "msf", "msa", "foWon", "foLost", "ofo", "dfo", "nfo", "penTaken", "penDrawn"]
 
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-players.csv", "w")
-	outString = "season,date,gameId,team,iceSit,playerId,strengthSit,scoreSit"
+	outString = "season,date,gameId,team,iceSit,playerId,position,strengthSit,scoreSit"
 	for stat in stats:
 		outString += "," + stat
 	outString += "\n"
@@ -1424,6 +1425,7 @@ for gameId in gameIds:
 					outString += "," + outTeams["away"]["abbrev"] + ",away"
 
 				outString += "," + str(pId)
+				outString += "," + outPlayers[pId]["position"]
 				outString += "," + strSit
 				outString += "," + str(scSit)
 
