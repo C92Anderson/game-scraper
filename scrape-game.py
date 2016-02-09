@@ -1180,7 +1180,7 @@ for gameId in gameIds:
 					outPlayers[pId]["ev4"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev4Secs, scoreSitSecs["away"][scoreSit]))
 					outPlayers[pId]["ev3"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev3Secs, scoreSitSecs["away"][scoreSit]))
 
-			elif nestedShifts[pId]["team"] == outTeams["away"]["abbrev"]:	# Record tois for players on the HOME team
+			elif nestedShifts[pId]["team"] == outTeams["home"]["abbrev"]:	# Record tois for players on the HOME team
 				for scoreSit in range(-3, 4):
 					outPlayers[pId]["ownGPulled"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ownGPulledSecs["home"], scoreSitSecs["home"][scoreSit]))
 					outPlayers[pId]["oppGPulled"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ownGPulledSecs["away"], scoreSitSecs["home"][scoreSit]))
