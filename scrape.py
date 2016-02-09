@@ -267,6 +267,9 @@ for gameId in gameIds:
 
 	# Done looping through boxscore stats tables
 
+	pprint(boxPlayers)
+	sys.exit()
+
 	# 
 	#
 	# Record each event in the PBP html file
