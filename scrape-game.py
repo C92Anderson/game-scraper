@@ -1356,12 +1356,12 @@ for gameId in gameIds:
 	# Output team stats
 	#
 
+	stats = ["toi", "gf", "ga", "sf", "sa", "bsf", "bsa", "msf", "msa", "foWon", "foLost", "ofo", "dfo", "nfo", "penTaken", "penDrawn"]
+
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-teams.csv", "w")
 	outString = "season,date,gameId,team,iceSit,strengthSit,scoreSit,"
-	outString += "toi,"
-	outString += "gf,ga,sf,sa,bsf,bsa,msf,msa,"
-	outString += "foWon,foLost,ofo,dfo,nfo,"
-	outString += "penTaken,penDrawn"
+	for stat in stats:
+		outString += "," + stat
 	outString += "\n"
 	outFile.write(outString)
 
@@ -1376,41 +1376,29 @@ for gameId in gameIds:
 				outString += "," + strSit
 				outString += "," + str(scSit)
 
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["toi"])
-
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["gf"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["ga"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["sf"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["sa"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["bsf"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["bsa"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["msf"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["msa"])
-
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["foWon"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["foLost"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["ofo"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["dfo"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["nfo"])
-
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["penTaken"])
-				outString += "," + str(outTeams[iceSit][strSit][scSit]["penDrawn"])
-
+				# Append each stat to the output string
+				# If all stats are equal to 0, then don't output the record
+				allZero = True
+				for stat in stats:
+					outString += "," + str(outTeams[iceSit][strSit][scSit][stat])
+					if outTeams[iceSit][strSit][scSit][stat] != 0:
+						allZero = False
 				outString += "\n"
-				outFile.write(outString)
 
+				if allZero == False:
+					outFile.write(outString)
 	outFile.close()
 
 	#
 	# Output player stats
 	#
 
+	stats = ["toi", "ig", "is", "ibs", "ims", "ia1", "ia2", "blocked", "gf", "ga", "sf", "sa", "bsf", "bsa", "msf", "msa", "foWon", "foLost", "ofo", "dfo", "nfo", "penTaken", "penDrawn"]
+
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-players.csv", "w")
-	outString = "season,date,gameId,team,iceSit,playerId,strengthSit,scoreSit,"
-	outString += "toi,ig,is,ibs,ims,ia1,ia2,blocked,"
-	outString += "gf,ga,sf,sa,bsf,bsa,msf,msa,"
-	outString += "foWon,foLost,ofo,dfo,nfo,"
-	outString += "penTaken,penDrawn"
+	outString = "season,date,gameId,team,iceSit,playerId,strengthSit,scoreSit"
+	for stat in stats:
+		outString += "," + stat
 	outString += "\n"
 	outFile.write(outString)
 
@@ -1431,35 +1419,17 @@ for gameId in gameIds:
 				outString += "," + strSit
 				outString += "," + str(scSit)
 
-				outString += "," + str(outPlayers[pId][strSit][scSit]["toi"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["ig"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["is"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["ibs"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["ims"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["ia1"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["ia2"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["blocked"])
-
-				outString += "," + str(outPlayers[pId][strSit][scSit]["gf"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["ga"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["sf"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["sa"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["bsf"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["bsa"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["msf"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["msa"])
-
-				outString += "," + str(outPlayers[pId][strSit][scSit]["foWon"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["foLost"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["ofo"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["dfo"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["nfo"])
-
-				outString += "," + str(outPlayers[pId][strSit][scSit]["penTaken"])
-				outString += "," + str(outPlayers[pId][strSit][scSit]["penDrawn"])
-
+				# Append each stat to the output string
+				# If all stats are equal to 0, then don't output the record
+				allZero = True
+				for stat in stats:
+					outString += "," + str(outPlayers[pId][strSit][scSit][stat])
+					if outPlayers[pId][strSit][scSit][stat] != 0:
+						allZero = False
 				outString += "\n"
-				outFile.write(outString)
+
+				if allZero == False:
+					outFile.write(outString)
 
 	outFile.close()
 
