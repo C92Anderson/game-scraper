@@ -798,10 +798,12 @@ for gameId in gameIds:
 					outPlayers[outEvents[ev]["roles"]["assist1"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ia1"] += 1
 				if "assist2" in outEvents[ev]["roles"]:
 					outPlayers[outEvents[ev]["roles"]["assist2"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ia2"] += 1
-			elif evType in ["shot", "missed_shot"]:
+			elif evType == "shot":
 				outPlayers[outEvents[ev]["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["is"] += 1
+			elif evType == "missed_shot":
+				outPlayers[outEvents[ev]["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ims"] += 1
 			elif evType == "blocked_shot":
-				outPlayers[outEvents[ev]["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["is"] += 1
+				outPlayers[outEvents[ev]["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ibs"] += 1
 				outPlayers[outEvents[ev]["roles"]["blocker"]][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["blocked"] += 1
 			elif evType == "penalty":
 				if "drewby" in outEvents[ev]["roles"]:
@@ -825,26 +827,26 @@ for gameId in gameIds:
 			for pId in hPlayers:
 				if evType == "goal":
 					if evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["gf"] += 1
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["gf"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["sf"] += 1
 					elif evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ga"] += 1
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sa"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["ga"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["sa"] += 1
 				elif evType == "shot":
 					if evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["sf"] += 1
 					elif evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sa"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["sa"] += 1
 				elif evType == "missed_shot":
 					if evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["msf"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["msf"] += 1
 					elif evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["msa"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["msa"] += 1
 				elif evType == "blocked_shot":
 					if evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["bsf"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["bsf"] += 1
 					elif evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["bsa"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["bsa"] += 1
 				elif evType == "faceoff":
 					# For face-off zone counts, we don't care who won (the evTeam) - we're just tracking how many o/d/n FOs the player was on the ice for
 					evHZone = outEvents[ev]["hZone"]
@@ -859,26 +861,26 @@ for gameId in gameIds:
 			for pId in aPlayers:
 				if evType == "goal":
 					if evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["gf"] += 1
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["gf"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["sf"] += 1
 					elif evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ga"] += 1
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sa"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["ga"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["sa"] += 1
 				elif evType == "shot":
 					if evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["sf"] += 1
 					elif evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sa"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["sa"] += 1
 				elif evType == "missed_shot":
 					if evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["msf"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["msf"] += 1
 					elif evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["msa"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["msa"] += 1
 				elif evType == "blocked_shot":
 					if evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["bsf"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["bsf"] += 1
 					elif evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["bsa"] += 1
+						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["bsa"] += 1
 				elif evType == "faceoff":
 					# For face-off zone counts, we don't care who won (the evTeam) - we're just tracking how many o/d/n FOs the player was on the ice for
 					# Since outEvents[ev]["hZone"] is always from the home-team's perspective, we need to flip the o-zone and d-zone for the away-team
