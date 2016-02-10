@@ -114,6 +114,10 @@ playerStats = ["toi", "ig", "is", "ibs", "ims", "ia1", "ia2", "blocked", "gf", "
 
 for gameId in gameIds:
 
+	if gameId < 20000 or gameId >= 40000:
+		print "Invalid gameId: " + str(gameId)
+		continue
+
 	print "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 	print "Processing game " + str(gameId)
 
