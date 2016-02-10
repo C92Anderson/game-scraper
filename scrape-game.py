@@ -562,34 +562,11 @@ for gameId in gameIds:
 			elif outEvents[jId]["type"] == "takeaway":
 				role = "taker"
 			elif outEvents[jId]["type"] == "goal":
-				pattern = "assists: "
-				assistersIdx = outEvents[jId]["description"].lower().find(pattern)
-				noAssistsIdx = outEvents[jId]["description"].lower().find("assists: none")
-
-				# Some json files have French descriptions, so check for assists in French if we couldn't find assistersIdx and noAssistsIdx in English
-				# For example: 2015020639
-				if assistersIdx < 0 and noAssistsIdx < 0:
-					pattern = "aides: "
-					assistersIdx = outEvents[jId]["description"].lower().find(pattern)
-					noAssistsIdx = outEvents[jId]["description"].lower().find("assists: none")
-
-				if assistersIdx >= 0 and noAssistsIdx < 0:
-					a1String = None
-					a2String = None
-					assistersString = outEvents[jId]["description"][outEvents[jId]["description"].lower().find(pattern):]
-					pattern = "), "
-					commaIdx = assistersString.find(pattern)
-					if commaIdx < 0: 	# 1 assister
-						a1String = assistersString
-					elif commaIdx >= 0:	# 2 assisters
-						a1String = assistersString.split(",")[0] # This substring contains the full name of the primary assister
-						a2String = assistersString.split(",")[1] # This substring contains the full name of the secondary assister
-
-					# Look for jP's full name in the a1 and a2 strings to see if jP has role assist1 or assist2
-					if a1String is not None and a1String.lower().find(jP["player"]["fullName"].lower()) >= 0:
-						role = "assist1"
-					elif a2String is not None and a2String.lower().find(jP["player"]["fullName"].lower()) >= 0:
-						role = "assist2"
+				# Assume that in jEv["players"], the scorer is always listed first, the primary assister listed second, and secondary assister listed third
+				if role == "assist" and jP["player"]["id"] == jEv["players"][1]["player"]["id"]:
+					role = "assist1"
+				elif role == "assist" and jP["player"]["id"] == jEv["players"][2]["player"]["id"]:
+					role = "assist2"
 
 			jRoles[role] = jP["player"]["id"]
 		
