@@ -55,6 +55,8 @@ gameIds = []									# List of gameIds to scrape
 inDir = "nhl-data/"								# Where the input files are stored
 outDir = "data-for-db/"							# Where the output files (to be written to database) are stored
 
+
+
 # Convert gameArg into a list of gameIds
 if gameArg.find("-") > 0:
 	startId = int(gameArg[0:gameArg.find("-")])
@@ -64,12 +66,19 @@ if gameArg.find("-") > 0:
 else:
 	gameIds = [int(gameArg)]
 
-
 #
 #
 # Scrape data for each game
 #
 #
+
+teamStats = ["toi", "gf", "ga", "sf", "sa", "bsf", "bsa", "msf", "msa", "foWon", "foLost", "ofo", "dfo", "nfo", "penTaken", "penDrawn"]
+playerStats = ["toi", "ig", "is", "ibs", "ims", "ia1", "ia2", "blocked", "gf", "ga", "sf", "sa", "bsf", "bsa", "msf", "msa", "foWon", "foLost", "ofo", "dfo", "nfo", "penTaken", "penDrawn"]
+
+# foWon: team won face-offs, individually won face-offs
+# foLost: team lost face-offs, individually lost face-offs
+# ig, is, ibs, ims, ia1, ia2: individual goals, shots, blocked shots, missed shots, primary assists, secondary assists
+# blocked: shots blocked by the individual
 
 for gameId in gameIds:
 
@@ -162,29 +171,10 @@ for gameId in gameIds:
 		# Initialize stats
 		for strSit in strengthSits:
 			outTeams[iceSit][strSit] = dict()
-
 			for scSit in scoreSits:
 				outTeams[iceSit][strSit][scSit] = dict()
-
-				outTeams[iceSit][strSit][scSit]["toi"] = 0
-				outTeams[iceSit][strSit][scSit]["foWon"] = 0	# won face-offs
-				outTeams[iceSit][strSit][scSit]["foLost"] = 0	# lost face-offs
-
-				outTeams[iceSit][strSit][scSit]["gf"] = 0
-				outTeams[iceSit][strSit][scSit]["ga"] = 0
-				outTeams[iceSit][strSit][scSit]["sf"] = 0
-				outTeams[iceSit][strSit][scSit]["sa"] = 0
-				outTeams[iceSit][strSit][scSit]["bsf"] = 0
-				outTeams[iceSit][strSit][scSit]["bsa"] = 0
-				outTeams[iceSit][strSit][scSit]["msf"] = 0
-				outTeams[iceSit][strSit][scSit]["msa"] = 0
-
-				outTeams[iceSit][strSit][scSit]["ofo"] = 0		# offensive zone face-off
-				outTeams[iceSit][strSit][scSit]["dfo"] = 0
-				outTeams[iceSit][strSit][scSit]["nfo"] = 0
-
-				outTeams[iceSit][strSit][scSit]["penTaken"] = 0
-				outTeams[iceSit][strSit][scSit]["penDrawn"] = 0
+				for stat in teamStats:
+					outTeams[iceSit][strSit][scSit][stat] = 0
 
 	# Create a 'playerIds' dictionary that translates team+jersey (used in the pbp html file) to playerIds
 	# Keys: 'home-##' and 'away-##' where ## are jersey numbers
@@ -214,36 +204,10 @@ for gameId in gameIds:
 		# Initialize stats
 		for strSit in strengthSits:
 			outPlayers[pId][strSit] = dict()
-
 			for scSit in scoreSits:
 				outPlayers[pId][strSit][scSit] = dict()
-
-				outPlayers[pId][strSit][scSit]["toi"] = 0
-				outPlayers[pId][strSit][scSit]["ig"] = 0		# individual goals
-				outPlayers[pId][strSit][scSit]["is"] = 0
-				outPlayers[pId][strSit][scSit]["ibs"] = 0
-				outPlayers[pId][strSit][scSit]["ims"] = 0
-				outPlayers[pId][strSit][scSit]["ia1"] = 0		# primary assists
-				outPlayers[pId][strSit][scSit]["ia2"] = 0		# secondary assists
-				outPlayers[pId][strSit][scSit]["blocked"] = 0	# shots that this player blocked
-				outPlayers[pId][strSit][scSit]["foWon"] = 0		# individual won face-offs
-				outPlayers[pId][strSit][scSit]["foLost"] = 0	# individual lost face-offs
-
-				outPlayers[pId][strSit][scSit]["gf"] = 0
-				outPlayers[pId][strSit][scSit]["ga"] = 0
-				outPlayers[pId][strSit][scSit]["sf"] = 0
-				outPlayers[pId][strSit][scSit]["sa"] = 0
-				outPlayers[pId][strSit][scSit]["bsf"] = 0
-				outPlayers[pId][strSit][scSit]["bsa"] = 0
-				outPlayers[pId][strSit][scSit]["msf"] = 0
-				outPlayers[pId][strSit][scSit]["msa"] = 0
-
-				outPlayers[pId][strSit][scSit]["ofo"] = 0		# offensive zone face-off
-				outPlayers[pId][strSit][scSit]["dfo"] = 0
-				outPlayers[pId][strSit][scSit]["nfo"] = 0
-
-				outPlayers[pId][strSit][scSit]["penTaken"] = 0
-				outPlayers[pId][strSit][scSit]["penDrawn"] = 0
+				for stat in playerStats:
+					outPlayers[pId][strSit][scSit][stat] = 0
 
 	#
 	#
@@ -1365,11 +1329,9 @@ for gameId in gameIds:
 	# Output team stats
 	#
 
-	stats = ["toi", "gf", "ga", "sf", "sa", "bsf", "bsa", "msf", "msa", "foWon", "foLost", "ofo", "dfo", "nfo", "penTaken", "penDrawn"]
-
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-teams.csv", "w")
 	outString = "season,date,gameId,team,iceSit,strengthSit,scoreSit,"
-	for stat in stats:
+	for stat in teamStats:
 		outString += "," + stat
 	outString += "\n"
 	outFile.write(outString)
@@ -1388,7 +1350,7 @@ for gameId in gameIds:
 				# Append each stat to the output string
 				# If all stats are equal to 0, then don't output the record
 				allZero = True
-				for stat in stats:
+				for stat in teamStats:
 					outString += "," + str(outTeams[iceSit][strSit][scSit][stat])
 					if outTeams[iceSit][strSit][scSit][stat] != 0:
 						allZero = False
@@ -1396,17 +1358,16 @@ for gameId in gameIds:
 
 				if allZero == False:
 					outFile.write(outString)
+					
 	outFile.close()
 
 	#
 	# Output player stats
 	#
 
-	stats = ["toi", "ig", "is", "ibs", "ims", "ia1", "ia2", "blocked", "gf", "ga", "sf", "sa", "bsf", "bsa", "msf", "msa", "foWon", "foLost", "ofo", "dfo", "nfo", "penTaken", "penDrawn"]
-
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-players.csv", "w")
 	outString = "season,date,gameId,team,iceSit,playerId,position,strengthSit,scoreSit"
-	for stat in stats:
+	for stat in playerStats:
 		outString += "," + stat
 	outString += "\n"
 	outFile.write(outString)
@@ -1432,7 +1393,7 @@ for gameId in gameIds:
 				# Append each stat to the output string
 				# If all stats are equal to 0, then don't output the record
 				allZero = True
-				for stat in stats:
+				for stat in playerStats:
 					outString += "," + str(outPlayers[pId][strSit][scSit][stat])
 					if outPlayers[pId][strSit][scSit][stat] != 0:
 						allZero = False
