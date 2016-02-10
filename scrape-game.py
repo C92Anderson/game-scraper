@@ -565,6 +565,14 @@ for gameId in gameIds:
 				pattern = "assists: "
 				assistersIdx = outEvents[jId]["description"].lower().find(pattern)
 				noAssistsIdx = outEvents[jId]["description"].lower().find("assists: none")
+
+				# Some json files have French descriptions, so check for assists in French if we couldn't find assistersIdx and noAssistsIdx in English
+				# For example: 2015020639
+				if assistersIdx < 0 and noAssistsIdx < 0:
+					pattern = "aides: "
+					assistersIdx = outEvents[jId]["description"].lower().find(pattern)
+					noAssistsIdx = outEvents[jId]["description"].lower().find("assists: none")
+
 				if assistersIdx >= 0 and noAssistsIdx < 0:
 					a1String = None
 					a2String = None
@@ -588,7 +596,7 @@ for gameId in gameIds:
 		if outEvents[jId]["type"] == "shot":
 			del jRoles["goalie"]
 		elif outEvents[jId]["type"] == "penalty":
-			if outEvents[jId]["description"].lower().find("puck over glass") >= 0:
+			if outEvents[jId]["subtype"].lower().find("puck over glass") >= 0:
 				if "servedby" not in jRoles and "drewby" in jRoles:
 					jRoles["servedby"] = jRoles["drewby"]
 					del jRoles["drewby"]
@@ -1212,7 +1220,7 @@ for gameId in gameIds:
 		outString += "," + str(toSecs(sh["startTime"]))
 		outString += "," + str(toSecs(sh["endTime"]))
 		outString += "\n"
-		outFile.write(outString)
+		outFile.write(outString.encode("utf-8"))
 
 	outFile.close()
 
@@ -1321,7 +1329,7 @@ for gameId in gameIds:
 		outString += "," + outputVal(outEvents[ev], "hG")
 
 		outString += "\n"
-		outFile.write(outString)
+		outFile.write(outString.encode("utf-8"))
 
 	outFile.close()
 
@@ -1357,7 +1365,7 @@ for gameId in gameIds:
 				outString += "\n"
 
 				if allZero == False:
-					outFile.write(outString)
+					outFile.write(outString.encode("utf-8"))
 					
 	outFile.close()
 
@@ -1400,7 +1408,7 @@ for gameId in gameIds:
 				outString += "\n"
 
 				if allZero == False:
-					outFile.write(outString)
+					outFile.write(outString.encode("utf-8"))
 
 	outFile.close()
 
@@ -1435,7 +1443,7 @@ for gameId in gameIds:
 		outString += "," + outPlayers[pId]["position"]
 
 		outString += "\n"
-		outFile.write(outString)
+		outFile.write(outString.encode("utf-8"))
 
 	outFile.close()
 
@@ -1496,6 +1504,7 @@ for gameId in gameIds:
 
 	print "Done processing game " + str(gameId)
 	print "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
+
 #
 # Done looping through each gameId
 #
