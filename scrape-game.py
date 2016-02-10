@@ -72,6 +72,38 @@ else:
 #
 #
 
+teamAbbrevs = dict()	# Converts full team names used in json (e.g., the event team) to json abbreviations (e.g., sjs)
+teamAbbrevs["carolina hurricanes"] = "car"
+teamAbbrevs["columbus blue jackets"] = "cbj"
+teamAbbrevs["new jersey devils"] = "njd"
+teamAbbrevs["new york islanders"] = "nyi"
+teamAbbrevs["new york rangers"] = "nyr"
+teamAbbrevs["philadelphia flyers"] = "phi"
+teamAbbrevs["pittsburgh penguins"] = "pit"
+teamAbbrevs["washington capitals"] = "wsh"
+teamAbbrevs["boston bruins"] = "bos"
+teamAbbrevs["buffalo sabres"] = "buf"
+teamAbbrevs["detroit red wings"] = "det"
+teamAbbrevs["florida panthers"] = "fla"
+teamAbbrevs["montreal canadiens"] = "mtl"
+teamAbbrevs["ottawa senators"] = "ott"
+teamAbbrevs["tampa bay lightning"] = "tbl"
+teamAbbrevs["toronto maple leafs"] = "tor"
+teamAbbrevs["chicago blackhawks"] = "chi"
+teamAbbrevs["colorado avalanche"] = "col"
+teamAbbrevs["dallas stars"] = "dal"
+teamAbbrevs["minnesota wild"] = "min"
+teamAbbrevs["nashville predators"] = "nsh"
+teamAbbrevs["st. louis blues"] = "stl"
+teamAbbrevs["winnipeg jets"] = "wpg"
+teamAbbrevs["anaheim ducks"] = "ana"
+teamAbbrevs["arizona coyotes"] = "ari"
+teamAbbrevs["calgary flames"] = "cgy"
+teamAbbrevs["edmonton oilers"] = "edm"
+teamAbbrevs["los angeles kings"] = "lak"
+teamAbbrevs["san jose sharks"] = "sjs"
+teamAbbrevs["vancouver canucks"] = "van"
+
 teamStats = ["toi", "gf", "ga", "sf", "sa", "bsf", "bsa", "msf", "msa", "foWon", "foLost", "ofo", "dfo", "nfo", "penTaken", "penDrawn"]
 playerStats = ["toi", "ig", "is", "ibs", "ims", "ia1", "ia2", "blocked", "gf", "ga", "sf", "sa", "bsf", "bsa", "msf", "msa", "foWon", "foLost", "ofo", "dfo", "nfo", "penTaken", "penDrawn"]
 
@@ -586,10 +618,20 @@ for gameId in gameIds:
 		# Done getting player roles
 		#
 
-		#
-		# Record period types
-		#
+		# Record event team from json - use the team abbreviation, not home/away
+		# For face-offs, the json's event team is the winner
+		# For blocked shots, the json's event team is the blocking team - we want to change this to the shooting team
+		# For penalties, the json's event team is the team who took the penalty
+		outEvents[jId]["team"] = None
+		if "team" in jEv:
+			outEvents[jId]["team"] = teamAbbrevs[jEv["team"]["name"].lower()]
+			if outEvents[jId]["type"] == "blocked_shot":
+				if outEvents[jId]["team"] == outTeams["home"]["abbrev"]:
+					outEvents[jId]["team"] = outTeams["away"]["abbrev"]
+				elif outEvents[jId]["team"] == outTeams["away"]["abbrev"]:
+					outEvents[jId]["team"] = outTeams["home"]["abbrev"]
 
+		# Record period types
 		if outEvents[jId]["period"] not in periodTypes:
 			periodTypes[outEvents[jId]["period"]] = outEvents[jId]["periodType"] 
 
@@ -607,7 +649,9 @@ for gameId in gameIds:
 				if (htmlEvents[hEv]["period"] == outEvents[jId]["period"]
 					and htmlEvents[hEv]["time"] == outEvents[jId]["time"]
 					and evTypes[htmlEvents[hEv]["type"]] == outEvents[jId]["type"]
-					and htmlEvents[hEv]["roles"] == jRoles):
+					and htmlEvents[hEv]["roles"] == jRoles
+					and (htmlEvents[hEv]["team"] == outEvents[jId]["team"] or (htmlEvents[hEv]["team"] is None and outEvents[jId]["team"] is None)) 
+					):
 
 					found = True
 					outEvents[jId]["aSkaterCount"] = len(htmlEvents[hEv]["aSkaters"])
@@ -619,12 +663,6 @@ for gameId in gameIds:
 						outEvents[jId]["hZone"] = htmlEvents[hEv]["hZone"]
 
 					if htmlEvents[hEv]["team"] is not None:
-
-						# Although the json event contains the event team, there are some differences
-						# 	e.g., the json attributes blocked shots to the blocker team; the html attributes it to the shooter team
-						# Also, we've already done a spot check to validate the html event team
-						#	because we used the event team + jersey numbers in the event description to translate the jersey numbers to playerIds
-						outEvents[jId]["team"] = htmlEvents[hEv]["team"]
 
 						# Record the iceSit (home/away)
 						if outEvents[jId]["team"] == outTeams["home"]["abbrev"]:
@@ -639,6 +677,10 @@ for gameId in gameIds:
 
 					# Create a "matched" flag to check results
 					htmlEvents[hEv]["matched"] = "matched"
+
+		# Delete the event team if it's None
+		if outEvents[jId]["team"] is None:
+			del outEvents[jId]["team"]
 
 		# Print unmatched json events
 		if found == False:
@@ -1170,6 +1212,7 @@ for gameId in gameIds:
 	#
 	#
 	# Prepare output files that will be loaded into the database
+	# Use .encode("utf-8") when writing the output string to handle accents in player names and French descriptions
 	#
 	#
 
