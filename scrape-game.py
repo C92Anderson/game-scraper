@@ -216,13 +216,19 @@ for gameId in gameIds:
 	# Keys: 'home-##' and 'away-##' where ## are jersey numbers
 	# Values: playerIds
 	playerIds = dict()
+	playerIdsToDelete = []
 	for iceSit in rosters:							# 'iceSit' will be 'home' or 'away'
 		for player in rosters[iceSit]["players"]:	# 'player' will be 'ID#' where # is a playerId
 
-			key = iceSit + "-" + rosters[iceSit]["players"][player]["jerseyNumber"]
-			playerIds[key] = int(rosters[iceSit]["players"][player]["person"]["id"])
-
-			outTeams[iceSit]["playerIds"].append(int(rosters[iceSit]["players"][player]["person"]["id"]))	# Append playerId to the appropriate team
+			# Only store players who have stats in the boxscore
+			# This handles cases where the boxscore contains 2 players on the same team with the same jersey number, but only 1 is active
+			# In the pbp json for 2015020002, both Stoll and Etem have #26, but Etem has no stats and doesn't appear in any events
+			if "stats" not in rosters[iceSit]["players"][player] or len(rosters[iceSit]["players"][player]["stats"]) == 0:
+				del players[(int(rosters[iceSit]["players"][player]["person"]["id"]))]	# Remove the inactive player from the 'players' dictionary
+			elif len(rosters[iceSit]["players"][player]["stats"]) >= 1:
+				key = iceSit + "-" + rosters[iceSit]["players"][player]["jerseyNumber"]
+				playerIds[key] = int(rosters[iceSit]["players"][player]["person"]["id"])
+				outTeams[iceSit]["playerIds"].append(int(rosters[iceSit]["players"][player]["person"]["id"]))	# Append playerId to the appropriate team
 
 	#
 	#
@@ -386,7 +392,7 @@ for gameId in gameIds:
 		elif evType == "hit":
 
 			hitter = evDesc.split("#")[1]				# Hitter is always listed first
-			hitter = hitter[0:hitter.find(" ")]
+			hitter = hitter[0:hitter.find(" ")]			# Get the jersey number after the pound-sign
 			hittee = evDesc.split("#")[2]
 			hittee = hittee[0:hittee.find(" ")]
 
@@ -647,6 +653,7 @@ for gameId in gameIds:
 
 		found = False
 		for hEv in htmlEvents:
+
 			if found == True:
 				break
 			else:
