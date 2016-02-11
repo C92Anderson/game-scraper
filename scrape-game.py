@@ -285,31 +285,33 @@ for gameId in gameIds:
 	# This dictionary will contain all the necessary information to:
 	# 1. Match the html events with the json events: period, time, event type, event subtype, p1, p2, p3
 	# 2. Enhance the json events with on-ice player information: skater counts, on-ice skater playerIds, on-ice goalie playerIds
-	htmlEvents = dict()
+	htmlEvents = []
 	rows = soup.find_all("tr", class_="evenColor")
 	for r in rows:
 
+		eventDict = dict()
+
 		# Get the event id used in the html file and use it as the key for the dictionary of html events
 		htmlId = int(r.find_all("td", class_=re.compile("bborder"))[0].text)
-		htmlEvents[htmlId] = dict()
+		eventDict["id"] = htmlId
 
 		# Periods in the NHL play-by-play data are always numbered 1, 2, 3, 4, 5 (in regular season, period 5 is the SO)
 		# Period numbering in the shift data is different
-		htmlEvents[htmlId]["period"] = int(r.find_all("td", class_=re.compile("bborder"))[1].text)
+		eventDict["period"] = int(r.find_all("td", class_=re.compile("bborder"))[1].text)
 
 		# Convert elapsed time to seconds
 		timeRange = r.find_all("td", class_=re.compile("bborder"))[3]
 		timeElapsed = timeRange.find("br").previousSibling
-		htmlEvents[htmlId]["time"] = toSecs(timeElapsed)
+		eventDict["time"] = toSecs(timeElapsed)
 
 		# Record the event type
 		evType = r.find_all("td", class_=re.compile("bborder"))[4].text.lower()
-		htmlEvents[htmlId]["type"] = evType
+		eventDict["type"] = evTypes[evType]
 
 		# Get the event description
 		evDesc = (r.find_all("td", class_=re.compile("bborder"))[5].text).replace(",", ";")
 		evDesc = evDesc.replace(unichr(160), " ") # Replace non-breaking spaces with spaces
-		htmlEvents[htmlId]["desc"] = evDesc
+		eventDict["desc"] = evDesc
 
 		# Get the team that TOOK the shot, MADE the hit, or WON the faceoff, etc.
 		evTeam = evDesc[0:evDesc.find(" ")].lower()
@@ -317,7 +319,7 @@ for gameId in gameIds:
 
 		if evTeam not in [outTeams["away"]["abbrev"], outTeams["home"]["abbrev"]]:
 			evTeam = None
-		htmlEvents[htmlId]["team"] = evTeam
+		eventDict["team"] = evTeam
 
 		#
 		# Parse the event description to produce the same roles found in the json
@@ -490,8 +492,8 @@ for gameId in gameIds:
 
 		for role in roles:
 			roles[role] = playerIds[roles[role]]
-
-		htmlEvents[htmlId]["roles"] = roles
+		if len(roles) > 0:
+			eventDict["roles"] = roles
 
 		#
 		# Get playerIds of home/away skaters and goalies
@@ -500,8 +502,8 @@ for gameId in gameIds:
 		tds = r.find_all("td", class_=re.compile("bborder")) 
 		onIce = [tds[6], tds[7]]
 
-		htmlEvents[htmlId]["aSkaters"] = []
-		htmlEvents[htmlId]["hSkaters"] = []
+		eventDict["aSkaters"] = []
+		eventDict["hSkaters"] = []
 
 		for i, td in enumerate(onIce):
 
@@ -516,9 +518,9 @@ for gameId in gameIds:
 				position = player["title"][0:player["title"].find(" - ")].lower()
 				playerId = playerIds[onIceTeam + "-" + player.text]
 				if position in ["right wing", "left wing", "center", "defense"]:
-					htmlEvents[htmlId][onIceTeam[0] + "Skaters"].append(playerId)
+					eventDict[onIceTeam[0] + "Skaters"].append(playerId)
 				elif position == "goalie":
-					htmlEvents[htmlId][onIceTeam[0] + "G"] = playerId
+					eventDict[onIceTeam[0] + "G"] = playerId
 
 		#
 		# Get the zone in which the event occurred - always use the home team's perspective
@@ -547,7 +549,12 @@ for gameId in gameIds:
 				evHZone = "d"
 			elif evDesc.lower().find("neu. zone") >= 0:
 				evHZone = "n"
-		htmlEvents[htmlId]["hZone"] = evHZone
+		eventDict["hZone"] = evHZone
+
+		# Create a flag to record whether this html event has been matched with a json event
+		eventDict["matched"] = False
+
+		htmlEvents.append(copy.deepcopy(eventDict))
 
 	#
 	# Done looping through html events
@@ -567,7 +574,7 @@ for gameId in gameIds:
 
 	# Create a dictionary to store periodTypes (used when we output the shifts to the shifts csv)
 	periodTypes = dict()
-	
+
 	for jEv in events:
 
 		# Create a dictionary for this event
@@ -655,27 +662,26 @@ for gameId in gameIds:
 
 		found = False
 		for hEv in htmlEvents:
-
 			if found == True:
 				break
 			else:
-				if (htmlEvents[hEv]["period"] == outEvents[jId]["period"]
-					and htmlEvents[hEv]["time"] == outEvents[jId]["time"]
-					and evTypes[htmlEvents[hEv]["type"]] == outEvents[jId]["type"]
-					and htmlEvents[hEv]["roles"] == jRoles
-					and (htmlEvents[hEv]["team"] == outEvents[jId]["team"] or (htmlEvents[hEv]["team"] is None and outEvents[jId]["team"] is None)) 
+				if (hEv["period"] == outEvents[jId]["period"]
+					and hEv["time"] == outEvents[jId]["time"]
+					and hEv["type"] == outEvents[jId]["type"]
+					and (("roles" not in hEv and "roles" not in outEvents[jId]) or hEv["roles"] == outEvents[jId]["roles"]) 
+					and (("team" not in hEv and "team" not in outEvents[jId]) or (hEv["team"] is None and outEvents[jId]["team"] is None) or hEv["team"] == outEvents[jId]["team"]) 
+					and hEv["matched"] == False
 					):
-
 					found = True
-					outEvents[jId]["aSkaterCount"] = len(htmlEvents[hEv]["aSkaters"])
-					outEvents[jId]["hSkaterCount"] = len(htmlEvents[hEv]["hSkaters"])
-					outEvents[jId]["aSkaters"] = htmlEvents[hEv]["aSkaters"]
-					outEvents[jId]["hSkaters"] = htmlEvents[hEv]["hSkaters"]
+					outEvents[jId]["aSkaterCount"] = len(hEv["aSkaters"])
+					outEvents[jId]["hSkaterCount"] = len(hEv["hSkaters"])
+					outEvents[jId]["aSkaters"] = hEv["aSkaters"]
+					outEvents[jId]["hSkaters"] = hEv["hSkaters"]
 
-					if htmlEvents[hEv]["hZone"] is not None:
-						outEvents[jId]["hZone"] = htmlEvents[hEv]["hZone"]
+					if hEv["hZone"] is not None:
+						outEvents[jId]["hZone"] = hEv["hZone"]
 
-					if htmlEvents[hEv]["team"] is not None:
+					if hEv["team"] is not None:
 
 						# Record the iceSit (home/away)
 						if outEvents[jId]["team"] == outTeams["home"]["abbrev"]:
@@ -683,13 +689,13 @@ for gameId in gameIds:
 						elif outEvents[jId]["team"] == outTeams["away"]["abbrev"]:
 							outEvents[jId]["iceSit"] = "away"
 
-					if "aG" in htmlEvents[hEv]:
-						outEvents[jId]["aG"] = htmlEvents[hEv]["aG"]
-					if "hG" in htmlEvents[hEv]:
-						outEvents[jId]["hG"] = htmlEvents[hEv]["hG"]
+					if "aG" in hEv:
+						outEvents[jId]["aG"] = hEv["aG"]
+					if "hG" in hEv:
+						outEvents[jId]["hG"] = hEv["hG"]
 
 					# Create a "matched" flag to check results
-					htmlEvents[hEv]["matched"] = "matched"
+					hEv["matched"] = True
 
 		# Delete the event team if it's None
 		if outEvents[jId]["team"] is None:
@@ -719,8 +725,8 @@ for gameId in gameIds:
 
 	# Print unmatched html events
 	for hEv in htmlEvents:
-		if "matched" not in htmlEvents[hEv]:
-			print "Unmatched html event " + str(hEv) + ": " + htmlEvents[hEv]["desc"]
+		if "matched" not in hEv:
+			print "Unmatched html event " + str(hEv["id"]) + ": " + hEv["desc"]
 
 	#
 	#
