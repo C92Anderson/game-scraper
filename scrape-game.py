@@ -72,7 +72,27 @@ else:
 #
 #
 
-teamAbbrevs = dict()	# Converts full team names used in json (e.g., the event team) to json abbreviations (e.g., sjs)
+# Converts event types found in the html file --> event types found in the json file
+evTypes = dict()
+evTypes["fac"] = "faceoff"
+evTypes["shot"] = "shot"
+evTypes["miss"] = "missed_shot"
+evTypes["block"] = "blocked_shot"
+evTypes["penl"] = "penalty"
+evTypes["goal"] = "goal"
+evTypes["give"] = "giveaway"
+evTypes["take"] = "takeaway"
+evTypes["hit"] = "hit"
+evTypes["stop"] = "stop"
+evTypes["pstr"] = "period_start"
+evTypes["pend"] = "period_end"
+evTypes["gend"] = "game_end"
+evTypes["soc"] = "shootout_complete"
+evTypes["goff"] = "game_official"	# "goff" isn't included in every html pbp file	
+evTypes["chl"] = ""					# league challenge - these don't look like they're captured in the json
+
+# Converts full team names used in json (e.g., the event team) to json abbreviations (e.g., sjs)
+teamAbbrevs = dict()	
 teamAbbrevs["carolina hurricanes"] = "car"
 teamAbbrevs["columbus blue jackets"] = "cbj"
 teamAbbrevs["new jersey devils"] = "njd"
@@ -547,24 +567,6 @@ for gameId in gameIds:
 
 	# Create a dictionary to store periodTypes (used when we output the shifts to the shifts csv)
 	periodTypes = dict()
-
-	# Dictionary to map the event types found in the html file --> event types found in the json file
-	evTypes = dict()
-	evTypes["fac"] = "faceoff"
-	evTypes["shot"] = "shot"
-	evTypes["miss"] = "missed_shot"
-	evTypes["block"] = "blocked_shot"
-	evTypes["penl"] = "penalty"
-	evTypes["goal"] = "goal"
-	evTypes["give"] = "giveaway"
-	evTypes["take"] = "takeaway"
-	evTypes["hit"] = "hit"
-	evTypes["stop"] = "stop"
-	evTypes["pstr"] = "period_start"
-	evTypes["pend"] = "period_end"
-	evTypes["gend"] = "game_end"
-	evTypes["soc"] = "shootout_complete"
-	evTypes["chl"] = ""				# league challenge - these don't look like they're captured in the json
 	
 	for jEv in events:
 
