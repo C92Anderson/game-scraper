@@ -317,9 +317,8 @@ for gameId in gameIds:
 		evTeam = evDesc[0:evDesc.find(" ")].lower()
 		evTeam = useNewTeamAbbrev(evTeam)
 
-		if evTeam not in [outTeams["away"]["abbrev"], outTeams["home"]["abbrev"]]:
-			evTeam = None
-		eventDict["team"] = evTeam
+		if evTeam in [outTeams["away"]["abbrev"], outTeams["home"]["abbrev"]]:
+			eventDict["team"] = evTeam
 
 		#
 		# Parse the event description to produce the same roles found in the json
@@ -549,7 +548,8 @@ for gameId in gameIds:
 				evHZone = "d"
 			elif evDesc.lower().find("neu. zone") >= 0:
 				evHZone = "n"
-		eventDict["hZone"] = evHZone
+		if evHZone is not None:
+			eventDict["hZone"] = evHZone
 
 		# Create a flag to record whether this html event has been matched with a json event
 		eventDict["matched"] = False
@@ -641,7 +641,6 @@ for gameId in gameIds:
 		# For face-offs, the json's event team is the winner
 		# For blocked shots, the json's event team is the blocking team - we want to change this to the shooting team
 		# For penalties, the json's event team is the team who took the penalty
-		outEvents[jId]["team"] = None
 		if "team" in jEv:
 			outEvents[jId]["team"] = teamAbbrevs[jEv["team"]["name"].lower()]
 			if outEvents[jId]["type"] == "blocked_shot":
@@ -669,7 +668,7 @@ for gameId in gameIds:
 					and hEv["time"] == outEvents[jId]["time"]
 					and hEv["type"] == outEvents[jId]["type"]
 					and (("roles" not in hEv and "roles" not in outEvents[jId]) or hEv["roles"] == outEvents[jId]["roles"]) 
-					and (("team" not in hEv and "team" not in outEvents[jId]) or (hEv["team"] is None and outEvents[jId]["team"] is None) or hEv["team"] == outEvents[jId]["team"]) 
+					and (("team" not in hEv and "team" not in outEvents[jId]) or hEv["team"] == outEvents[jId]["team"]) 
 					and hEv["matched"] == False
 					):
 					found = True
@@ -678,12 +677,11 @@ for gameId in gameIds:
 					outEvents[jId]["aSkaters"] = hEv["aSkaters"]
 					outEvents[jId]["hSkaters"] = hEv["hSkaters"]
 
-					if hEv["hZone"] is not None:
+					if "hZone" in hEv:
 						outEvents[jId]["hZone"] = hEv["hZone"]
 
-					if hEv["team"] is not None:
-
-						# Record the iceSit (home/away)
+					# Record the iceSit (home/away)
+					if "team" in hEv:
 						if outEvents[jId]["team"] == outTeams["home"]["abbrev"]:
 							outEvents[jId]["iceSit"] = "home"
 						elif outEvents[jId]["team"] == outTeams["away"]["abbrev"]:
@@ -696,10 +694,6 @@ for gameId in gameIds:
 
 					# Create a "matched" flag to check results
 					hEv["matched"] = True
-
-		# Delete the event team if it's None
-		if outEvents[jId]["team"] is None:
-			del outEvents[jId]["team"]
 
 		# Print unmatched json events
 		if found == False:
