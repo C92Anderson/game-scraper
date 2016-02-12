@@ -156,16 +156,14 @@ for gameId in gameIds:
 	# Input file urls
 	shiftJsonUrl = "http://www.nhl.com/stats/rest/shiftcharts?cayenneExp=gameId=" + str(shortSeasonArg) + "0" + str(gameId)
 	pbpJsonUrl = "https://statsapi.web.nhl.com/api/v1/game/" + str(shortSeasonArg) + "0" + str(gameId) + "/feed/live"
-	pbpHtmlUrl = "http://www.nhl.com/scores/htmlreports/" + str(seasonArg) + "/PL0" + str(gameId) + ".HTM"
 
 	# Downloaded input file names
 	shiftJson = str(seasonArg) + "-" + str(gameId) + "-shifts.json"
 	pbpJson = str(seasonArg) + "-" + str(gameId) + "-events.json"
-	pbpHtml = str(seasonArg) + "-" + str(gameId) + "-events.html"
 
 	# Download files that don't already exist
-	filenames = [shiftJson, pbpJson, pbpHtml]
-	fileUrls = [shiftJsonUrl, pbpJsonUrl, pbpHtmlUrl]
+	filenames = [shiftJson, pbpJson]
+	fileUrls = [shiftJsonUrl, pbpJsonUrl]
 	for i, filename in enumerate(filenames):
 		if os.path.isfile(inDir + filename) == False:
 			print "Downloading " + str(filename)
@@ -232,24 +230,6 @@ for gameId in gameIds:
 				for stat in teamStats:
 					outTeams[iceSit][strSit][scSit][stat] = 0
 
-	# Create a 'playerIds' dictionary that translates team+jersey (used in the pbp html file) to playerIds
-	# Keys: 'home-##' and 'away-##' where ## are jersey numbers
-	# Values: playerIds
-	playerIds = dict()
-	playerIdsToDelete = []
-	for iceSit in rosters:							# 'iceSit' will be 'home' or 'away'
-		for player in rosters[iceSit]["players"]:	# 'player' will be 'ID#' where # is a playerId
-
-			# Only store players who have stats in the boxscore
-			# This handles cases where the boxscore contains 2 players on the same team with the same jersey number, but only 1 is active
-			# In the pbp json for 2015020002, both Stoll and Etem have #26, but Etem has no stats and doesn't appear in any events
-			if "stats" not in rosters[iceSit]["players"][player] or len(rosters[iceSit]["players"][player]["stats"]) == 0:
-				del players[(int(rosters[iceSit]["players"][player]["person"]["id"]))]	# Remove the inactive player from the 'players' dictionary
-			elif len(rosters[iceSit]["players"][player]["stats"]) >= 1:
-				key = iceSit + "-" + rosters[iceSit]["players"][player]["jerseyNumber"]
-				playerIds[key] = int(rosters[iceSit]["players"][player]["person"]["id"])
-				outTeams[iceSit]["playerIds"].append(int(rosters[iceSit]["players"][player]["person"]["id"]))	# Append playerId to the appropriate team
-
 	#
 	#
 	# Prepare players output
@@ -273,326 +253,37 @@ for gameId in gameIds:
 
 	#
 	#
-	# Parse pbpHtml
-	#
-	#
-
-	inFile = file(inDir + pbpHtml, "r")
-	soup = BeautifulSoup(inFile.read(), "lxml")
-	inFile.close()
-
-	# Store html events in a dictionary
-	# This dictionary will contain all the necessary information to:
-	# 1. Match the html events with the json events: period, time, event type, event subtype, p1, p2, p3
-	# 2. Enhance the json events with on-ice player information: skater counts, on-ice skater playerIds, on-ice goalie playerIds
-	htmlEvents = []
-	rows = soup.find_all("tr", class_="evenColor")
-	for r in rows:
-
-		eventDict = dict()
-
-		# Get the event id used in the html file and use it as the key for the dictionary of html events
-		htmlId = int(r.find_all("td", class_=re.compile("bborder"))[0].text)
-		eventDict["id"] = htmlId
-
-		# Periods in the NHL play-by-play data are always numbered 1, 2, 3, 4, 5 (in regular season, period 5 is the SO)
-		# Period numbering in the shift data is different
-		eventDict["period"] = int(r.find_all("td", class_=re.compile("bborder"))[1].text)
-
-		# Convert elapsed time to seconds
-		timeRange = r.find_all("td", class_=re.compile("bborder"))[3]
-		timeElapsed = timeRange.find("br").previousSibling
-		eventDict["time"] = toSecs(timeElapsed)
-
-		# Record the event type
-		evType = r.find_all("td", class_=re.compile("bborder"))[4].text.lower()
-		eventDict["type"] = evTypes[evType]
-
-		# Get the event description
-		evDesc = (r.find_all("td", class_=re.compile("bborder"))[5].text).replace(",", ";")
-		evDesc = evDesc.replace(unichr(160), " ") # Replace non-breaking spaces with spaces
-		eventDict["desc"] = evDesc
-
-		# Get the team that TOOK the shot, MADE the hit, or WON the faceoff, etc.
-		evTeam = evDesc[0:evDesc.find(" ")].lower()
-		evTeam = useNewTeamAbbrev(evTeam)
-
-		if evTeam in [outTeams["away"]["abbrev"], outTeams["home"]["abbrev"]]:
-			eventDict["team"] = evTeam
-
-		#
-		# Parse the event description to produce the same roles found in the json
-		#
-
-		roles = dict()
-
-		if evType == "fac":
-			aTaker = evDesc.split("#")[1]				# The away FO taker is always listed first
-			aTaker = aTaker[0:aTaker.find(" ")]
-			hTaker = evDesc.split("#")[2]				# The home FO taker is always listed first
-			hTaker = hTaker[0:hTaker.find(" ")]
-
-			if evTeam == outTeams["away"]["abbrev"]:
-				roles["winner"] = "away-" + aTaker
-				roles["loser"] = "home-" + hTaker
-			elif evTeam == outTeams["home"]["abbrev"]:
-				roles["winner"] = "home-" + hTaker
-				roles["loser"] = "away-" + aTaker
-
-		elif evType in ["shot", "miss"]:
-			
-			shooter = evDesc.split("#")[1]				# Only a single player is listed for shots-on-goal and misses
-			shooter = shooter[0:shooter.find(" ")]
-
-			if evTeam == outTeams["away"]["abbrev"]:
-				shooter = "away-" + shooter
-			elif evTeam == outTeams["home"]["abbrev"]:
-				shooter = "home-" + shooter
-			roles["shooter"] = shooter
-
-		elif evType == "block":
-			
-			shooter = evDesc.split("#")[1]				# The shooter is always listed first
-			shooter = shooter[0:shooter.find(" ")]
-			blocker = evDesc.split("#")[2]				# The blocker is always listed first
-			blocker = blocker[0:blocker.find(" ")]
-
-			if evTeam == outTeams["away"]["abbrev"]:
-				roles["shooter"] = "away-" + shooter
-				roles["blocker"] = "home-" + blocker
-			elif evTeam == outTeams["home"]["abbrev"]:
-				roles["shooter"] = "home-" + shooter
-				roles["blocker"] = "away-" + blocker
-
-		elif evType in ["give", "take"]:
-
-			player = evDesc.split("#")[1]				# Only a single player is listed for giveaways and takeaway
-			player = player[0:player.find(" ")]
-
-			if evTeam == outTeams["away"]["abbrev"]:
-				player = "away-" + player
-			elif evTeam == outTeams["home"]["abbrev"]:
-				player = "home-" + player
-
-			if evType == "give":
-				roles["giver"] = player
-			elif evType == "take":
-				roles["taker"] = player
-
-		elif evType == "goal":
-
-			numPlayers = evDesc.count("#")
-
-			if numPlayers >= 1:
-				scorer = evDesc.split("#")[1]				# Scorer is always listed first
-				scorer = scorer[0:scorer.find(" ")]
-				if evTeam == outTeams["away"]["abbrev"]:
-					scorer = "away-" + scorer
-				elif evTeam == outTeams["home"]["abbrev"]:
-					scorer = "home-" + scorer
-				roles["scorer"] = scorer
-
-			if numPlayers >= 2:
-				a1 = evDesc.split("#")[2]				# Primary assister is always listed second
-				a1 = a1[0:a1.find(" ")]
-				if evTeam == outTeams["away"]["abbrev"]:
-					a1 = "away-" + a1
-				elif evTeam == outTeams["home"]["abbrev"]:
-					a1 = "home-" + a1
-				roles["assist1"] = a1
-
-			if numPlayers >= 3:
-				a2 = evDesc.split("#")[3]				# Secondary assister is always listed second
-				a2 = a2[0:a2.find(" ")]
-				if evTeam == outTeams["away"]["abbrev"]:
-					a2 = "away-" + a2
-				elif evTeam == outTeams["home"]["abbrev"]:
-					a2 = "home-" + a2
-				roles["assist2"] = a2
-
-		elif evType == "hit":
-
-			hitter = evDesc.split("#")[1]				# Hitter is always listed first
-			hitter = hitter[0:hitter.find(" ")]			# Get the jersey number after the pound-sign
-			hittee = evDesc.split("#")[2]
-			hittee = hittee[0:hittee.find(" ")]
-
-			if evTeam == outTeams["away"]["abbrev"]:
-				roles["hitter"] = "away-" + hitter
-				roles["hittee"] = "home-" + hittee
-			elif evTeam == outTeams["home"]["abbrev"]:
-				roles["hitter"] = "home-" + hitter
-				roles["hittee"] = "away-" + hittee
-
-		elif evType == "penl":
-
-			# Get the content between the 1st and 2nd spaces
-			# If a player took the penalty, then it will return #XX
-			# If a team took the penalty, then it will return 'TEAM'
-			penaltyOn = evDesc.split(" ")[1]
-			poundIdx = penaltyOn.find("#")
-			if poundIdx >= 0:
-				penaltyOn = penaltyOn[poundIdx+1:]
-				if evTeam == outTeams["away"]["abbrev"]:
-					penaltyOn = "away-" + penaltyOn
-				elif evTeam == outTeams["home"]["abbrev"]:
-					penaltyOn = "home-" + penaltyOn
-			else:
-				penaltyOn = None
-
-			# Get the player who drew the penalty
-			drawnBy = None
-			pattern = "Drawn By: "
-			drawnByIdx = evDesc.find(pattern)
-			if drawnByIdx >= 0:								# Only search for the pattern if it exists
-				drawnBy = evDesc[evDesc.find(pattern):]		# Returns a substring *starting* with the pattern
-				drawnBy = drawnBy[len(pattern):]			# Remove the pattern from the substring
-				drawnBy = drawnBy[drawnBy.find("#")+1:]		# Remove the team abbreviation and "#" from the beginning of the string											
-				drawnBy = drawnBy[0:drawnBy.find(" ")]		# Isolate the jersey number
-
-				if evTeam == outTeams["away"]["abbrev"]:	# The penalty-drawer is always on the opposite team of the penalty-taker
-					drawnBy = "home-" + drawnBy
-				elif evTeam == outTeams["home"]["abbrev"]:
-					drawnBy = "away-" + drawnBy
-
-			# Get the player who served the penalty
-			servedBy = None
-			pattern = "Served By: #"
-			servedByIdx = evDesc.find(pattern)
-			if servedByIdx >= 0:							# Only search for the pattern if it exists
-				servedBy = evDesc[evDesc.find(pattern):]	# Returns a substring *starting* with the pattern
-				servedBy = servedBy[len(pattern):]			# Remove the pattern from the substring
-				servedBy = servedBy[0:servedBy.find(" ")]	# Isolate the jersey number
-
-				if evTeam == outTeams["away"]["abbrev"]:
-					servedBy = "away-" + servedBy
-				elif evTeam == outTeams["home"]["abbrev"]:
-					servedBy = "home-" + servedBy
-
-			# In the json file, if it's a too many men bench minor,
-			#	the description looks like this: "Too many men/ice served by Sam Gagner"
-			#	and Sam Gagner is given playerType "PenaltyOn"
-			# To replicate this with the html data, do the following:
-			if evDesc.lower().find("too many") >= 0 and penaltyOn is None and servedBy is not None:
-				penaltyOn = servedBy
-				servedBy = None
-
-			# Don't record roles with no player assigned
-			if penaltyOn is not None:
-				roles["penaltyon"] = penaltyOn
-			if servedBy is not None:
-				roles["servedby"] = servedBy
-			if drawnBy is not None:
-				roles["drewby"] = drawnBy
-
-		#
-		# Convert jersey numbers into playerIds and store the dict
-		#
-
-		for role in roles:
-			roles[role] = playerIds[roles[role]]
-		if len(roles) > 0:
-			eventDict["roles"] = roles
-
-		#
-		# Get playerIds of home/away skaters and goalies
-		#
-
-		tds = r.find_all("td", class_=re.compile("bborder")) 
-		onIce = [tds[6], tds[7]]
-
-		eventDict["aSkaters"] = []
-		eventDict["hSkaters"] = []
-
-		for i, td in enumerate(onIce):
-
-			onIceSkaters = []
-			onIceTeam = ""
-			if i == 0:
-				onIceTeam = "away"
-			elif i == 1:
-				onIceTeam = "home"
-
-			for player in td.find_all(attrs={"style" : "cursor:hand;"}):
-				position = player["title"][0:player["title"].find(" - ")].lower()
-				playerId = playerIds[onIceTeam + "-" + player.text]
-				if position in ["right wing", "left wing", "center", "defense"]:
-					eventDict[onIceTeam[0] + "Skaters"].append(playerId)
-				elif position == "goalie":
-					eventDict[onIceTeam[0] + "G"] = playerId
-
-		#
-		# Get the zone in which the event occurred - always use the home team's perspective
-		#
-
-		evHZone = None
-		if evType == "block":
-			if evTeam == outTeams["home"]["abbrev"] and evDesc.lower().find("off. zone") >= 0:		# home team took shot, blocked by away team in away team's off. zone
-				evHZone = "d"
-			elif evTeam == outTeams["away"]["abbrev"] and evDesc.lower().find("def. zone") >= 0:	# away team took shot, blocked by home team in home team's def. zone
-				evHZone = "d"
-			elif evTeam == outTeams["home"]["abbrev"] and evDesc.lower().find("def. zone") >= 0:	# home team took shot, blocked by away team in away team's def. zone
-				evHZone = "o"
-			elif evTeam == outTeams["away"]["abbrev"] and evDesc.lower().find("off. zone") >= 0:	# away team took shot, blocked by home team in home team's off. zone
-				evHZone = "o"
-			elif evDesc.lower().find("neu. zone") >= 0:
-				evHZone = "n"
-		else: 
-			if evTeam == outTeams["home"]["abbrev"] and evDesc.lower().find("off. zone") >= 0:		# home team created event (excluding blocked shot) in home team's off. zone (incl. winning face off)
-				evHZone = "o"
-			elif evTeam == outTeams["away"]["abbrev"] and evDesc.lower().find("def. zone") >= 0:
-				evHZone = "o"
-			elif evTeam == outTeams["home"]["abbrev"] and evDesc.lower().find("def. zone") >= 0:
-				evHZone = "d"
-			elif evTeam == outTeams["away"]["abbrev"] and evDesc.lower().find("off. zone") >= 0:
-				evHZone = "d"
-			elif evDesc.lower().find("neu. zone") >= 0:
-				evHZone = "n"
-		if evHZone is not None:
-			eventDict["hZone"] = evHZone
-
-		# Create a flag to record whether this html event has been matched with a json event
-		eventDict["matched"] = False
-
-		htmlEvents.append(copy.deepcopy(eventDict))
-
-	#
-	# Done looping through html events
-	#
-
-	#
-	#
-	# Append on-ice skater data to the json event data
-	# Match on period, time, event-type, and event-players/roles
+	# Prepare events output
 	#
 	#
 
 	print "Processing json events"
 
-	# Prepare dictionary of events for output
-	outEvents = dict()
+	# Prepare list of events for output
+	outEvents = []
 
 	# Create a dictionary to store periodTypes (used when we output the shifts to the shifts csv)
 	periodTypes = dict()
 
 	for jEv in events:
 
+		newDict = dict()
+
 		# Create a dictionary for this event
-		jId = jEv["about"]["eventIdx"]
-		outEvents[jId] = dict()
+		newDict["id"] = jEv["about"]["eventIdx"]
 
-		outEvents[jId]["period"] = jEv["about"]["period"]
-		outEvents[jId]["periodType"] = jEv["about"]["periodType"].lower()
-		outEvents[jId]["time"] = toSecs(jEv["about"]["periodTime"])
+		newDict["period"] = jEv["about"]["period"]
+		newDict["periodType"] = jEv["about"]["periodType"].lower()
+		newDict["time"] = toSecs(jEv["about"]["periodTime"])
 
-		outEvents[jId]["description"] = jEv["result"]["description"]
-		outEvents[jId]["type"] = jEv["result"]["eventTypeId"].lower()
+		newDict["description"] = jEv["result"]["description"]
+		newDict["type"] = jEv["result"]["eventTypeId"].lower()
 		if "secondaryType" in jEv["result"]:
-			outEvents[jId]["subtype"] = jEv["result"]["secondaryType"].lower()
+			newDict["subtype"] = jEv["result"]["secondaryType"].lower()
 
 		if "coordinates" in jEv and len(jEv["coordinates"]) == 2:
-			outEvents[jId]["locX"] = jEv["coordinates"]["x"]
-			outEvents[jId]["locY"] = jEv["coordinates"]["y"]
+			newDict["locX"] = jEv["coordinates"]["x"]
+			newDict["locY"] = jEv["coordinates"]["y"]
 
 		# Record players and their roles
 		# Some additional processing required:
@@ -608,11 +299,11 @@ for gameId in gameIds:
 
 			role = jP["playerType"].lower()
 
-			if outEvents[jId]["type"] == "giveaway":
+			if newDict["type"] == "giveaway":
 				role = "giver"
-			elif outEvents[jId]["type"] == "takeaway":
+			elif newDict["type"] == "takeaway":
 				role = "taker"
-			elif outEvents[jId]["type"] == "goal":
+			elif newDict["type"] == "goal":
 				# Assume that in jEv["players"], the scorer is always listed first, the primary assister listed second, and secondary assister listed third
 				if role == "assist" and jP["player"]["id"] == jEv["players"][1]["player"]["id"]:
 					role = "assist1"
@@ -621,17 +312,17 @@ for gameId in gameIds:
 
 			jRoles[role] = jP["player"]["id"]
 		
-		if outEvents[jId]["type"] == "shot":
+		if newDict["type"] == "shot":
 			del jRoles["goalie"]
-		elif outEvents[jId]["type"] == "penalty":
-			if outEvents[jId]["subtype"].lower().find("puck over glass") >= 0:
+		elif newDict["type"] == "penalty":
+			if newDict["subtype"].lower().find("puck over glass") >= 0:
 				if "servedby" not in jRoles and "drewby" in jRoles:
 					jRoles["servedby"] = jRoles["drewby"]
 					del jRoles["drewby"]
 
 		# If there's no roles, we don't want to create a 'roles' key in the event's output dictionary
 		if len(jRoles) > 0:
-			outEvents[jId]["roles"] = jRoles
+			newDict["roles"] = jRoles
 
 		#
 		# Done getting player roles
@@ -642,342 +333,48 @@ for gameId in gameIds:
 		# For blocked shots, the json's event team is the blocking team - we want to change this to the shooting team
 		# For penalties, the json's event team is the team who took the penalty
 		if "team" in jEv:
-			outEvents[jId]["team"] = teamAbbrevs[jEv["team"]["name"].lower()]
-			if outEvents[jId]["type"] == "blocked_shot":
-				if outEvents[jId]["team"] == outTeams["home"]["abbrev"]:
-					outEvents[jId]["team"] = outTeams["away"]["abbrev"]
-				elif outEvents[jId]["team"] == outTeams["away"]["abbrev"]:
-					outEvents[jId]["team"] = outTeams["home"]["abbrev"]
+			newDict["team"] = teamAbbrevs[jEv["team"]["name"].lower()]
+			if newDict["type"] == "blocked_shot":
+				if newDict["team"] == outTeams["home"]["abbrev"]:
+					newDict["team"] = outTeams["away"]["abbrev"]
+				elif newDict["team"] == outTeams["away"]["abbrev"]:
+					newDict["team"] = outTeams["home"]["abbrev"]
 
 		# Record period types
-		if outEvents[jId]["period"] not in periodTypes:
-			periodTypes[outEvents[jId]["period"]] = outEvents[jId]["periodType"] 
-
-		#
-		#
-		# Find the corresponding html event so we can record: the event team, event's zone, all on-ice players
-		#
-		#
-
-		found = False
-		for hEv in htmlEvents:
-			if found == True:
-				break
-			else:
-				if (hEv["period"] == outEvents[jId]["period"]
-					and hEv["time"] == outEvents[jId]["time"]
-					and hEv["type"] == outEvents[jId]["type"]
-					and (("roles" not in hEv and "roles" not in outEvents[jId]) or hEv["roles"] == outEvents[jId]["roles"]) 
-					and (("team" not in hEv and "team" not in outEvents[jId]) or hEv["team"] == outEvents[jId]["team"]) 
-					and hEv["matched"] == False
-					):
-					found = True
-					outEvents[jId]["aSkaterCount"] = len(hEv["aSkaters"])
-					outEvents[jId]["hSkaterCount"] = len(hEv["hSkaters"])
-					outEvents[jId]["aSkaters"] = hEv["aSkaters"]
-					outEvents[jId]["hSkaters"] = hEv["hSkaters"]
-
-					if "hZone" in hEv:
-						outEvents[jId]["hZone"] = hEv["hZone"]
-
-					# Record the iceSit (home/away)
-					if "team" in hEv:
-						if outEvents[jId]["team"] == outTeams["home"]["abbrev"]:
-							outEvents[jId]["iceSit"] = "home"
-						elif outEvents[jId]["team"] == outTeams["away"]["abbrev"]:
-							outEvents[jId]["iceSit"] = "away"
-
-					if "aG" in hEv:
-						outEvents[jId]["aG"] = hEv["aG"]
-					if "hG" in hEv:
-						outEvents[jId]["hG"] = hEv["hG"]
-
-					# Create a "matched" flag to check results
-					hEv["matched"] = True
-
-		# Print unmatched json events
-		if found == False:
-			print "Unmatched json event " + str(jId) + ": " + outEvents[jId]["description"]
+		if newDict["period"] not in periodTypes:
+			periodTypes[newDict["period"]] = newDict["periodType"] 
 
 		# Record the home and away scores when the event occurred
 		# For goals, the json includes the goal itself in the score situation, but it's more accurate to say that the first goal was scored when it was 0-0
 		# Don't do this for shootout goals - the json doesn't increment the home and away scores for these
-		if outEvents[jId]["type"] == "goal" and outEvents[jId]["periodType"] != "shootout":
-			if outEvents[jId]["team"] == outTeams["away"]["abbrev"]:
-				outEvents[jId]["aScore"] = jEv["about"]["goals"]["away"] - 1
-				outEvents[jId]["hScore"] = jEv["about"]["goals"]["home"]	
-			elif outEvents[jId]["team"] == outTeams["home"]["abbrev"]:
-				outEvents[jId]["aScore"] = jEv["about"]["goals"]["away"]
-				outEvents[jId]["hScore"] = jEv["about"]["goals"]["home"] - 1	
+		if newDict["type"] == "goal" and newDict["periodType"] != "shootout":
+			if newDict["team"] == outTeams["away"]["abbrev"]:
+				newDict["aScore"] = jEv["about"]["goals"]["away"] - 1
+				newDict["hScore"] = jEv["about"]["goals"]["home"]	
+			elif newDict["team"] == outTeams["home"]["abbrev"]:
+				newDict["aScore"] = jEv["about"]["goals"]["away"]
+				newDict["hScore"] = jEv["about"]["goals"]["home"] - 1	
 		else:
-			outEvents[jId]["aScore"] = jEv["about"]["goals"]["away"]
-			outEvents[jId]["hScore"] = jEv["about"]["goals"]["home"]
+			newDict["aScore"] = jEv["about"]["goals"]["away"]
+			newDict["hScore"] = jEv["about"]["goals"]["home"]
+
+		# Prepare lists to store on-ice players
+		newDict["aSkaters"] = []
+		newDict["hSkaters"] = []
+		newDict["aGoalie"] = None
+		newDict["hGoalie"] = None
+
+		#
+		# Add event to list
+		#
+
+		outEvents.append(copy.deepcopy(newDict))
 
 	#
-	# Done looping through json events to match events with html events and preparing outEvents
+	# Done looping through json events, so clear the original dictionary
 	#
 
-	# Print unmatched html events
-	for hEv in htmlEvents:
-		if "matched" not in hEv:
-			print "Unmatched html event " + str(hEv["id"]) + ": " + hEv["desc"]
-
-	#
-	#
-	# Loop through events and increment players' stats and teams' stats
-	#
-	#
-
-	for ev in outEvents:
-
-		# Don't increment stats for events in regular season shoot-outs
-		if gameId < 30000 and outEvents[ev]["period"] >= 5:
-			continue
-
-		if outEvents[ev]["type"] in ["goal", "shot", "missed_shot", "blocked_shot", "faceoff", "penalty"]:
-
-			#
-			# Get the score and strength situation for each team
-			#
-			
-			teamScoreSits = dict()	# Returns the score situation from the key-team's perspective
-			teamScoreSits[outTeams["away"]["abbrev"]] = max(-3, min(3, outEvents[ev]["aScore"] - outEvents[ev]["hScore"]))
-			teamScoreSits[outTeams["home"]["abbrev"]] = max(-3, min(3, outEvents[ev]["hScore"] - outEvents[ev]["aScore"]))
-
-			oppScoreSits = dict()	# Returns the score situation from the key-team's opponent perspective
-			oppScoreSits[outTeams["away"]["abbrev"]] = max(-3, min(3, outEvents[ev]["hScore"] - outEvents[ev]["aScore"]))
-			oppScoreSits[outTeams["home"]["abbrev"]] = max(-3, min(3, outEvents[ev]["aScore"] - outEvents[ev]["hScore"]))
-
-			teamStrengthSits = dict()	# Returns the strength situation from the key-team's perspective
-			oppStrengthSits = dict()	# Returns the strength situation from the key-team's opponent perspective
-
-			if "aG" not in outEvents[ev]:
-				teamStrengthSits[outTeams["away"]["abbrev"]] = "ownGPulled"
-				teamStrengthSits[outTeams["home"]["abbrev"]] = "oppGPulled"
-				oppStrengthSits[outTeams["away"]["abbrev"]] = "oppGPulled"
-				oppStrengthSits[outTeams["home"]["abbrev"]] = "ownGPulled"
-			elif "hG" not in outEvents[ev]:
-				teamStrengthSits[outTeams["away"]["abbrev"]] = "oppGPulled"
-				teamStrengthSits[outTeams["home"]["abbrev"]] = "ownGPulled"
-				oppStrengthSits[outTeams["away"]["abbrev"]] = "ownGPulled"
-				oppStrengthSits[outTeams["home"]["abbrev"]] = "oppGPulled"
-			elif outEvents[ev]["aSkaterCount"] - outEvents[ev]["hSkaterCount"] == 1:
-				teamStrengthSits[outTeams["away"]["abbrev"]] = "pp"
-				teamStrengthSits[outTeams["home"]["abbrev"]] = "pk"
-				oppStrengthSits[outTeams["away"]["abbrev"]] = "pk"
-				oppStrengthSits[outTeams["home"]["abbrev"]] = "pp"
-			elif outEvents[ev]["hSkaterCount"] - outEvents[ev]["aSkaterCount"] == 1:
-				teamStrengthSits[outTeams["away"]["abbrev"]] = "pk"
-				teamStrengthSits[outTeams["home"]["abbrev"]] = "pp"
-				oppStrengthSits[outTeams["away"]["abbrev"]] = "pp"
-				oppStrengthSits[outTeams["home"]["abbrev"]] = "pk"
-			elif outEvents[ev]["aSkaterCount"] - outEvents[ev]["hSkaterCount"] == 2:
-				teamStrengthSits[outTeams["away"]["abbrev"]] = "pp2"
-				teamStrengthSits[outTeams["home"]["abbrev"]] = "pk2"
-				oppStrengthSits[outTeams["away"]["abbrev"]] = "pk2"
-				oppStrengthSits[outTeams["home"]["abbrev"]] = "pp2"
-			elif outEvents[ev]["hSkaterCount"] - outEvents[ev]["aSkaterCount"] == 2:
-				teamStrengthSits[outTeams["away"]["abbrev"]] = "pk2"
-				teamStrengthSits[outTeams["home"]["abbrev"]] = "pp2"
-				oppStrengthSits[outTeams["away"]["abbrev"]] = "pp2"
-				oppStrengthSits[outTeams["home"]["abbrev"]] = "pk2"
-			elif outEvents[ev]["hSkaterCount"] == outEvents[ev]["aSkaterCount"]:
-				if outEvents[ev]["hSkaterCount"] == 5:
-					teamStrengthSits[outTeams["away"]["abbrev"]] = "ev5"
-					teamStrengthSits[outTeams["home"]["abbrev"]] = "ev5"
-					oppStrengthSits[outTeams["away"]["abbrev"]] = "ev5"
-					oppStrengthSits[outTeams["home"]["abbrev"]] = "ev5"
-				elif outEvents[ev]["hSkaterCount"] == 4:
-					teamStrengthSits[outTeams["away"]["abbrev"]] = "ev4"
-					teamStrengthSits[outTeams["home"]["abbrev"]] = "ev4"
-					oppStrengthSits[outTeams["away"]["abbrev"]] = "ev4"
-					oppStrengthSits[outTeams["home"]["abbrev"]] = "ev4"
-				elif outEvents[ev]["hSkaterCount"] == 3:
-					teamStrengthSits[outTeams["away"]["abbrev"]] = "ev3"
-					teamStrengthSits[outTeams["home"]["abbrev"]] = "ev3"
-					oppStrengthSits[outTeams["away"]["abbrev"]] = "ev3"
-					oppStrengthSits[outTeams["home"]["abbrev"]] = "ev3"
-			else:
-				# For events where skater counts look messed up, skip the event
-				# For example, event #40 shows 5v1: http://www.nhl.com/scores/htmlreports/20152016/PL020003.HTM
-				continue
-
-			#
-			# Increment individual stats
-			#
-
-			evType = outEvents[ev]["type"]
-			evTeam = outEvents[ev]["team"]
-
-			if evType == "goal":
-				outPlayers[outEvents[ev]["roles"]["scorer"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ig"] += 1
-				outPlayers[outEvents[ev]["roles"]["scorer"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["is"] += 1
-				if "assist1" in outEvents[ev]["roles"]:
-					outPlayers[outEvents[ev]["roles"]["assist1"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ia1"] += 1
-				if "assist2" in outEvents[ev]["roles"]:
-					outPlayers[outEvents[ev]["roles"]["assist2"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ia2"] += 1
-			elif evType == "shot":
-				outPlayers[outEvents[ev]["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["is"] += 1
-			elif evType == "missed_shot":
-				outPlayers[outEvents[ev]["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ims"] += 1
-			elif evType == "blocked_shot":
-				outPlayers[outEvents[ev]["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ibs"] += 1
-				outPlayers[outEvents[ev]["roles"]["blocker"]][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["blocked"] += 1
-			elif evType == "penalty":
-				if "drewby" in outEvents[ev]["roles"]:
-					outPlayers[outEvents[ev]["roles"]["drewby"]][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["penDrawn"] += 1
-				if "penaltyon" in outEvents[ev]["roles"]:
-					outPlayers[outEvents[ev]["roles"]["penaltyon"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["penTaken"] += 1
-			elif evType == "faceoff":
-				outPlayers[outEvents[ev]["roles"]["winner"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["foWon"] += 1
-				outPlayers[outEvents[ev]["roles"]["loser"]][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["foLost"] += 1
-
-			#
-			# Increment stats for on-ice players
-			#
-
-			hPlayers = []
-			if "hSkaters" in outEvents[ev]:
-				hPlayers.extend(outEvents[ev]["hSkaters"])
-			if "hG" in outEvents[ev]:
-				hPlayers.append(outEvents[ev]["hG"])
-
-			for pId in hPlayers:
-				if evType == "goal":
-					if evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["gf"] += 1
-						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["sf"] += 1
-					elif evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["ga"] += 1
-						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["sa"] += 1
-				elif evType == "shot":
-					if evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["sf"] += 1
-					elif evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["sa"] += 1
-				elif evType == "missed_shot":
-					if evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["msf"] += 1
-					elif evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["msa"] += 1
-				elif evType == "blocked_shot":
-					if evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["bsf"] += 1
-					elif evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]]["bsa"] += 1
-				elif evType == "faceoff":
-					# For face-off zone counts, we don't care who won (the evTeam) - we're just tracking how many o/d/n FOs the player was on the ice for
-					evHZone = outEvents[ev]["hZone"]
-					outPlayers[pId][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]][evHZone + "fo"] += 1
-
-			aPlayers = []
-			if "aSkaters" in outEvents[ev]:
-				aPlayers.extend(outEvents[ev]["aSkaters"])
-			if "aG" in outEvents[ev]:
-				aPlayers.append(outEvents[ev]["aG"])
-
-			for pId in aPlayers:
-				if evType == "goal":
-					if evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["gf"] += 1
-						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["sf"] += 1
-					elif evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["ga"] += 1
-						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["sa"] += 1
-				elif evType == "shot":
-					if evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["sf"] += 1
-					elif evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["sa"] += 1
-				elif evType == "missed_shot":
-					if evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["msf"] += 1
-					elif evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["msa"] += 1
-				elif evType == "blocked_shot":
-					if evTeam == outTeams["away"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["bsf"] += 1
-					elif evTeam == outTeams["home"]["abbrev"]:
-						outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]]["bsa"] += 1
-				elif evType == "faceoff":
-					# For face-off zone counts, we don't care who won (the evTeam) - we're just tracking how many o/d/n FOs the player was on the ice for
-					# Since outEvents[ev]["hZone"] is always from the home-team's perspective, we need to flip the o-zone and d-zone for the away-team
-					evAZone = "n"
-					if outEvents[ev]["hZone"] == "o":
-						evAZone = "d"
-					elif outEvents[ev]["hZone"] == "d":
-						evAZone = "o"
-					outPlayers[pId][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]][evAZone + "fo"] += 1
-
-			#
-			# Increment stats for teams
-			#
-
-			if evType == "goal":
-				if evTeam == outTeams["home"]["abbrev"]:
-					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["gf"] += 1
-					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
-					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["ga"] += 1
-					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["sa"] += 1
-				elif evTeam == outTeams["away"]["abbrev"]:
-					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["gf"] += 1
-					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
-					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["ga"] += 1
-					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["sa"] += 1
-			elif evType == "shot":
-				if evTeam == outTeams["home"]["abbrev"]:
-					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
-					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["sa"] += 1
-				elif evTeam == outTeams["away"]["abbrev"]:
-					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["sf"] += 1
-					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["sa"] += 1
-			elif evType == "missed_shot":
-				if evTeam == outTeams["home"]["abbrev"]:
-					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["msf"] += 1
-					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["msa"] += 1
-				elif evTeam == outTeams["away"]["abbrev"]:
-					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["msf"] += 1
-					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["msa"] += 1
-			elif evType == "blocked_shot":
-				if evTeam == outTeams["home"]["abbrev"]:
-					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["bsf"] += 1
-					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["bsa"] += 1
-				elif evTeam == outTeams["away"]["abbrev"]:
-					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["bsf"] += 1
-					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["bsa"] += 1
-			elif evType == "penalty":
-				if evTeam == outTeams["home"]["abbrev"]:
-					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["penTaken"] += 1
-					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["penDrawn"] += 1
-				elif evTeam == outTeams["away"]["abbrev"]:
-					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["penTaken"] += 1
-					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["penDrawn"] += 1
-			elif evType == "faceoff":
-				# Increment o/d/n faceoffs for the home team
-				evHZone = outEvents[ev]["hZone"]
-				outTeams["home"][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]][evHZone + "fo"] += 1
-
-				# Increment o/d/n faceoffs for the away team
-				evAZone = None
-				if outEvents[ev]["hZone"] == "o":
-					evAZone = "d"
-				elif outEvents[ev]["hZone"] == "d":
-					evAZone = "o"
-				elif outEvents[ev]["hZone"] == "n":
-					evAZone = "n"
-				outTeams["away"][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]][evAZone + "fo"] += 1
-
-				# Increment foWon/foLost counts
-				if evTeam == outTeams["home"]["abbrev"]:
-					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["foWon"] += 1
-					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["foLost"] += 1
-				elif evTeam == outTeams["away"]["abbrev"]:
-					outTeams["away"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["foWon"] += 1
-					outTeams["home"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["foLost"] += 1
-
-	#
-	# Done looping through outEvents to record player stats
-	#
+	del events
 
 	#
 	#
@@ -1147,8 +544,8 @@ for gameId in gameIds:
 		# The score differential is calculated from the home team's perspective (home - away)
 		#
 
-		periodStart = [outEvents[ev] for ev in outEvents if outEvents[ev]["type"] == "period_start" and outEvents[ev]["period"] == period][0]
-		goals = [outEvents[ev] for ev in outEvents if outEvents[ev]["type"] == "goal" and outEvents[ev]["period"] == period]
+		periodStart = [ev for ev in outEvents if ev["type"] == "period_start" and ev["period"] == period][0]
+		goals = [ev for ev in outEvents if ev["type"] == "goal" and ev["period"] == period]
 
 		# Initialize the dictionary by setting each second to the score differential at the period's start
 		scoreDiffPerSec = dict()
@@ -1257,320 +654,28 @@ for gameId in gameIds:
 
 	#
 	#
-	# Prepare output files that will be loaded into the database
-	# Use .encode("utf-8") when writing the output string to handle accents in player names and French descriptions
+	# Append on-ice skaters and goalies to the event data
 	#
 	#
+	
+	for playerId in nestedShifts:					# Loop through each player
+		for period in range(1, maxPeriod + 1):		# Loop through each of the player's periods; can't use 'for period in nestedShifts["player"] because there's other keys (team, iceSit, position)
+			for ev in outEvents:										# Loop through all events to find events for which the player was on the ice
+				if ev["period"] == period:								# We only care about events in the same period as the shifts we're currently looking at
+					if ev["time"] in nestedShifts[playerId][period]:	# Check if the event second is in the set of seconds that the place was on the ice
+						if nestedShifts[playerId]["position"] == "g":	# Store on-ice goalie
+							if nestedShifts[playerId]["iceSit"] == "home":
+								ev["hGoalie"] = playerId
+							elif nestedShifts[playerId]["iceSit"] == "away":
+								ev["aGoalie"] = playerId
+						else:											# Store on-ice skater
+							if nestedShifts[playerId]["iceSit"] == "home":
+								ev["hSkaters"].append(playerId)
+							elif nestedShifts[playerId]["iceSit"] == "away":
+								ev["aSkaters"].append(playerId)
 
-	print "- - - - -"
-	print "Preparing csv files"
+	pprint(outEvents)
 
-	#
-	# Output shifts
-	#
-
-	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-shifts.csv", "w")
-	outString = "season,date,gameId,team,iceSit,playerId,position,period,periodType,start,end\n"
-	outFile.write(outString)
-
-	for sh in shifts:
-		outString = str(seasonArg)
-		outString += "," + str(gameDate)
-		outString += "," + str(gameId)
-		outString += "," + nestedShifts[sh["playerId"]]["team"]
-		outString += "," + nestedShifts[sh["playerId"]]["iceSit"]
-		outString += "," + str(sh["playerId"])
-		outString += "," + nestedShifts[pId]["position"]
-		outString += "," + str(sh["period"])
-		outString += "," + periodTypes[sh["period"]]
-		outString += "," + str(toSecs(sh["startTime"]))
-		outString += "," + str(toSecs(sh["endTime"]))
-		outString += "\n"
-		outFile.write(outString.encode("utf-8"))
-
-	outFile.close()
-
-	#
-	# Output events
-	#
-
-	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-events.csv", "w")
-	outString = "season,date,gameId,eventId,"
-	outString += "period,periodType,time,aScore,hScore,aSkaters,hSkaters,hZone,locX,locY,"
-	outString += "desc,type,subtype,"
-	outString += "team,teamIceSit,"	# team is the event team; teamIceSit is home/away for the event team
-	outString += "p1,p2,p3,p1Role,p2Role,p3Role,"
-	outString += "aS1,aS2,aS3,aS4,aS5,aS6,aG,"
-	outString += "hS1,hS2,hS3,hS4,hS5,hS6,hG\n"
-	outFile.write(outString)
-
-	for ev in outEvents:
-
-		outString = str(seasonArg)
-		outString += "," + str(gameDate)
-		outString += "," + str(gameId)
-		outString += "," + str(ev)
-
-		outString += "," + str(outEvents[ev]["period"])
-		outString += "," + str(outEvents[ev]["periodType"])
-		outString += "," + str(outEvents[ev]["time"])
-		outString += "," + str(outEvents[ev]["aScore"])
-		outString += "," + str(outEvents[ev]["hScore"])
-		outString += "," + outputVal(outEvents[ev], "aSkaterCount")
-		outString += "," + outputVal(outEvents[ev], "hSkaterCount")
-		outString += "," + outputVal(outEvents[ev], "hZone")
-		outString += "," + outputVal(outEvents[ev], "locX")
-		outString += "," + outputVal(outEvents[ev], "locY")
-
-		outString += "," + outEvents[ev]["description"].replace(",", ";") # Replace commas to maintain the csv structure
-		outString += "," + outEvents[ev]["type"]
-		outString += "," + outputVal(outEvents[ev], "subtype")
-
-		outString += "," + outputVal(outEvents[ev], "team")
-		outString += "," + outputVal(outEvents[ev], "iceSit")
-
-		#
-		# Process roles
-		#
-
-		if "roles" not in outEvents[ev]:
-			outString += ",NULL,NULL,NULL,NULL,NULL,NULL"
-		else:
-			pIdString = ""
-			roleString = ""
-
-			# Append playerIds and roles
-			roleCount = 0
-			for role in outEvents[ev]["roles"]:
-				pIdString += "," + str(outEvents[ev]["roles"][role])
-				roleString += "," + role
-				roleCount += 1
-			# If there are less than 3 playerIds, pad the shortage with NULLs
-			while roleCount < 3:
-				pIdString += ",NULL"
-				roleString += ",NULL"
-				roleCount += 1
-			# Add the playerIds and roles to the output
-			outString += pIdString + roleString
-
-		#
-		# Append on-ice playerIds
-		#
-
-		# AWAY SKATERS
-		pIdString = ""
-		if "aSkaters" not in outEvents[ev]:
-			outString += ",NULL,NULL,NULL,NULL,NULL,NULL"
-		else:
-			# Append playerIds
-			count = 0
-			for pId in outEvents[ev]["aSkaters"]:
-				pIdString += "," + str(pId)
-				count += 1
-			# If there are less than 6 skater playerIds, pad the shortage with NULLs
-			while count < 6:
-				pIdString += ",NULL"
-				count += 1
-		outString += pIdString
-
-		# AWAY GOALIE
-		outString += "," + outputVal(outEvents[ev], "aG")
-
-		# HOME SKATERS
-		pIdString = ""
-		if "hSkaters" not in outEvents[ev]:
-			outString += ",NULL,NULL,NULL,NULL,NULL,NULL"
-		else:
-			# Append playerIds
-			count = 0
-			for pId in outEvents[ev]["hSkaters"]:
-				pIdString += "," + str(pId)
-				count += 1
-			# If there are less than 6 skater playerIds, pad the shortage with NULLs
-			while count < 6:
-				pIdString += ",NULL"
-				count += 1
-		outString += pIdString
-
-		# HOME GOALIE
-		outString += "," + outputVal(outEvents[ev], "hG")
-
-		outString += "\n"
-		outFile.write(outString.encode("utf-8"))
-
-	outFile.close()
-
-	#
-	# Output team stats
-	#
-
-	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-teams.csv", "w")
-	outString = "season,date,gameId,team,iceSit,strengthSit,scoreSit"
-	for stat in teamStats:
-		outString += "," + stat
-	outString += "\n"
-	outFile.write(outString)
-
-	for iceSit in outTeams:
-		for strSit in strengthSits:	# Can't use "strSit in outTeam[iceSit]" because outTeams[iceSit] has additional keys: abbrev, playerIds
-			for scSit in outTeams[iceSit][strSit]:
-				outString = str(seasonArg)
-				outString += "," + str(gameDate)
-				outString += "," + str(gameId)
-				outString += "," + outTeams[iceSit]["abbrev"]
-				outString += "," + iceSit
-				outString += "," + strSit
-				outString += "," + str(scSit)
-
-				# Append each stat to the output string
-				# If all stats are equal to 0, then don't output the record
-				allZero = True
-				for stat in teamStats:
-					outString += "," + str(outTeams[iceSit][strSit][scSit][stat])
-					if outTeams[iceSit][strSit][scSit][stat] != 0:
-						allZero = False
-				outString += "\n"
-
-				if allZero == False:
-					outFile.write(outString.encode("utf-8"))
-					
-	outFile.close()
-
-	#
-	# Output player stats
-	#
-
-	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-players.csv", "w")
-	outString = "season,date,gameId,team,iceSit,playerId,position,strengthSit,scoreSit"
-	for stat in playerStats:
-		outString += "," + stat
-	outString += "\n"
-	outFile.write(outString)
-
-	for pId in outPlayers:
-		for strSit in strengthSits:	# Can't use "strSit in outTeam[iceSit]" because outTeams[iceSit] has additional keys: firstname, lastname, position
-			for scSit in outPlayers[pId][strSit]:
-				outString = str(seasonArg)
-				outString += "," + str(gameDate)
-				outString += "," + str(gameId)
-
-				# Get the player's team and iceSit
-				if pId in outTeams["home"]["playerIds"]:
-					outString += "," + outTeams["home"]["abbrev"] + ",home"
-				elif pId in outTeams["away"]["playerIds"]:
-					outString += "," + outTeams["away"]["abbrev"] + ",away"
-
-				outString += "," + str(pId)
-				outString += "," + outPlayers[pId]["position"]
-				outString += "," + strSit
-				outString += "," + str(scSit)
-
-				# Append each stat to the output string
-				# If all stats are equal to 0, then don't output the record
-				allZero = True
-				for stat in playerStats:
-					outString += "," + str(outPlayers[pId][strSit][scSit][stat])
-					if outPlayers[pId][strSit][scSit][stat] != 0:
-						allZero = False
-				outString += "\n"
-
-				if allZero == False:
-					outFile.write(outString.encode("utf-8"))
-
-	outFile.close()
-
-	#
-	# Output rosters
-	#
-
-	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-rosters.csv", "w")
-	outString = "season,date,gameId,team,iceSit,playerId,firstName,lastName,jersey,position\n"
-	outFile.write(outString)
-
-	for pId in outPlayers:
-
-		outString = str(seasonArg)
-		outString += "," + str(gameDate)
-		outString += "," + str(gameId)
-
-		# Get the player's team and iceSit
-		iceSit = "NULL"
-		if pId in outTeams["home"]["playerIds"]:
-			outString += "," + outTeams["home"]["abbrev"]
-			iceSit = "home"
-		elif pId in outTeams["away"]["playerIds"]:
-			outString += "," + outTeams["away"]["abbrev"]
-			iceSit = "away"
-		outString += "," + iceSit
-
-		outString += "," + str(pId)
-		outString += "," + outPlayers[pId]["firstName"]
-		outString += "," + outPlayers[pId]["lastName"]
-		outString += "," + rosters[iceSit]["players"]["ID" + str(pId)]["jerseyNumber"]
-		outString += "," + outPlayers[pId]["position"]
-
-		outString += "\n"
-		outFile.write(outString.encode("utf-8"))
-
-	outFile.close()
-
-	#
-	#
-	# Load csv files into database
-	#
-	#
-
-	print "- - - - -"
-
-	# Connect to database
-	databaseUser = dbconfig.user
-	databasePasswd = dbconfig.passwd
-	databaseHost = dbconfig.host
-	database = dbconfig.database
-	connection = mysql.connector.connect(user=databaseUser, passwd=databasePasswd, host=databaseHost, database=database)
-	cursor = connection.cursor()
-
-	# Load csv files into database
-	# Use a dictionary to link csv file names (key) with table names (value)
-	filesToLoad = dict()
-	filesToLoad["-events.csv"] = "game_events"
-	filesToLoad["-players.csv"] = "game_player_stats"
-	filesToLoad["-teams.csv"] = "game_team_stats"
-	filesToLoad["-shifts.csv"] = "game_shifts"
-	filesToLoad["-rosters.csv"] = "game_rosters"
-
-	for fileToLoad in filesToLoad:
-		fname = outDir + str(seasonArg) + "-" + str(gameId) + fileToLoad
-		query = ("LOAD DATA LOCAL INFILE '" + fname + "'"
-			+ " REPLACE INTO TABLE " + filesToLoad[fileToLoad]
-			+ " FIELDS TERMINATED BY ',' ENCLOSED BY '\"'"
-			+ " LINES TERMINATED BY '\\n'"
-			+ " IGNORE 1 LINES")
-		print "Loading " + fname + " into database"
-		cursor.execute(query)
-
-	#
-	# Insert game result into database using a prepared statement
-	#
-
-	cursor = connection.cursor(prepared=True) # Enable support for prepared statements
-
-	try:
-		timeRemaining = linescore["currentPeriodTimeRemaining"].lower()
-	except:
-		timeRemaining = linescore["currentPeriodTimeRemaining"]
-
-	query = ("REPLACE INTO game_result (season, date, gameId, aTeam, hTeam, aFinal, hFinal, lastPeriodNumber, lastPeriodName, lastPeriodTimeRemaining)"
-		+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-	args = (seasonArg, gameDate, gameId, outTeams["away"]["abbrev"], outTeams["home"]["abbrev"], linescore["teams"]["away"]["goals"], linescore["teams"]["home"]["goals"], linescore["currentPeriod"], linescore["currentPeriodOrdinal"].lower(), timeRemaining,)
-	cursor.execute(query, args)
-
-	# Close connection
-	cursor.close()
-	connection.close()
-
-	print "Done processing game " + str(gameId)
-	print "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 
 #
 # Done looping through each gameId
