@@ -797,6 +797,10 @@ for gameId in gameIds:
 					teamStrengthSits[outTeams["home"]["abbrev"]] = "ev3"
 					oppStrengthSits[outTeams["away"]["abbrev"]] = "ev3"
 					oppStrengthSits[outTeams["home"]["abbrev"]] = "ev3"
+			else:
+				# For events where skater counts look messed up, skip the event
+				# For example, event #40 shows 5v1: http://www.nhl.com/scores/htmlreports/20152016/PL020003.HTM
+				continue
 
 			#
 			# Increment individual stats
