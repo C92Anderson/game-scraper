@@ -968,7 +968,6 @@ for gameId in gameIds:
 				outTeams["away"][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]][evAZone + "fo"] += 1
 
 				# Increment foWon/foLost counts
-				print str(ev) + "--" + outEvents[ev]["description"] + "--" + evTeam + "--" + evHZone + "--" + teamStrengthSits[evTeam] + "--" + str(teamScoreSits[evTeam])
 				if evTeam == outTeams["home"]["abbrev"]:
 					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["foWon"] += 1
 					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["foLost"] += 1
