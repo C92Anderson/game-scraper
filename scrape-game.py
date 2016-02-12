@@ -958,14 +958,17 @@ for gameId in gameIds:
 				outTeams["home"][teamStrengthSits[outTeams["home"]["abbrev"]]][teamScoreSits[outTeams["home"]["abbrev"]]][evHZone + "fo"] += 1
 
 				# Increment o/d/n faceoffs for the away team
-				evAZone = "n"
+				evAZone = None
 				if outEvents[ev]["hZone"] == "o":
 					evAZone = "d"
 				elif outEvents[ev]["hZone"] == "d":
 					evAZone = "o"
+				elif outEvents[ev]["hZone"] == "n":
+					evAZone = "n"
 				outTeams["away"][teamStrengthSits[outTeams["away"]["abbrev"]]][teamScoreSits[outTeams["away"]["abbrev"]]][evAZone + "fo"] += 1
 
 				# Increment foWon/foLost counts
+				print str(ev) + "--" + outEvents[ev]["description"] + "--" + evTeam + "--" + evHZone + "--" + teamStrengthSits[evTeam] + "--" + str(teamScoreSits[evTeam])
 				if evTeam == outTeams["home"]["abbrev"]:
 					outTeams["home"][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["foWon"] += 1
 					outTeams["away"][oppStrengthSits[evTeam]][oppScoreSits[evTeam]]["foLost"] += 1
@@ -1294,7 +1297,7 @@ for gameId in gameIds:
 
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-events.csv", "w")
 	outString = "season,date,gameId,eventId,"
-	outString += "period,periodType,time,aScore,hScore,aSkaters,hSkaters,locX,locY,"
+	outString += "period,periodType,time,aScore,hScore,aSkaters,hSkaters,hZone,locX,locY,"
 	outString += "desc,type,subtype,"
 	outString += "team,teamIceSit,"	# team is the event team; teamIceSit is home/away for the event team
 	outString += "p1,p2,p3,p1Role,p2Role,p3Role,"
@@ -1316,6 +1319,7 @@ for gameId in gameIds:
 		outString += "," + str(outEvents[ev]["hScore"])
 		outString += "," + outputVal(outEvents[ev], "aSkaterCount")
 		outString += "," + outputVal(outEvents[ev], "hSkaterCount")
+		outString += "," + outputVal(outEvents[ev], "hZone")
 		outString += "," + outputVal(outEvents[ev], "locX")
 		outString += "," + outputVal(outEvents[ev], "locY")
 
@@ -1402,7 +1406,7 @@ for gameId in gameIds:
 	#
 
 	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-teams.csv", "w")
-	outString = "season,date,gameId,team,iceSit,strengthSit,scoreSit,"
+	outString = "season,date,gameId,team,iceSit,strengthSit,scoreSit"
 	for stat in teamStats:
 		outString += "," + stat
 	outString += "\n"
