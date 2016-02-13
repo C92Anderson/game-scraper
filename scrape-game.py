@@ -55,8 +55,6 @@ gameIds = []									# List of gameIds to scrape
 inDir = "nhl-data/"								# Where the input files are stored
 outDir = "data-for-db/"							# Where the output files (to be written to database) are stored
 
-
-
 # Convert gameArg into a list of gameIds
 if gameArg.find("-") > 0:
 	startId = int(gameArg[0:gameArg.find("-")])
@@ -71,25 +69,6 @@ else:
 # Scrape data for each game
 #
 #
-
-# Converts event types found in the html file --> event types found in the json file
-evTypes = dict()
-evTypes["fac"] = "faceoff"
-evTypes["shot"] = "shot"
-evTypes["miss"] = "missed_shot"
-evTypes["block"] = "blocked_shot"
-evTypes["penl"] = "penalty"
-evTypes["goal"] = "goal"
-evTypes["give"] = "giveaway"
-evTypes["take"] = "takeaway"
-evTypes["hit"] = "hit"
-evTypes["stop"] = "stop"
-evTypes["pstr"] = "period_start"
-evTypes["pend"] = "period_end"
-evTypes["gend"] = "game_end"
-evTypes["soc"] = "shootout_complete"
-evTypes["goff"] = "game_official"	# "goff" isn't included in every html pbp file	
-evTypes["chl"] = ""					# league challenge - these don't look like they're captured in the json
 
 # Converts full team names used in json (e.g., the event team) to json abbreviations (e.g., sjs)
 teamAbbrevs = dict()	
@@ -289,16 +268,11 @@ for gameId in gameIds:
 			newDict["locY"] = jEv["coordinates"]["y"]
 
 			#
-			#
 			# If coordinates exist, translate coordinates to zones
 			#
-			#
 
-			#
 			# Determine whether the home team's defensive zone has x < 0 or x > 0
 			# Starting in 2014-2015, teams switch ends prior to the start of OT in the regular season
-			#
-
 			hDefZoneIsNegX = None
 			if newDict["period"] % 2 == 0:	# For even-numbered periods (2, 4, etc.), the home team's def. zone has x > 0
 				hDefZoneIsNegX = False
@@ -313,10 +287,7 @@ for gameId in gameIds:
 				elif newDict["period"] == 1 and newDict["time"] >= 10 * 60:
 					hDefZoneIsNegX = False
 
-			#
 			# Store the event's zone from the home team's perspective
-			#
-
 			# Redlines are located at x = -25 and +25
 			if newDict["locX"] >= -25 and newDict["locX"] <= 25:
 				newDict["hZone"] = "n"
@@ -366,13 +337,9 @@ for gameId in gameIds:
 					jRoles["servedby"] = jRoles["drewby"]
 					del jRoles["drewby"]
 
-		# If there's no roles, we don't want to create a 'roles' key in the event's output dictionary
+		# If there's no roles - we don't want to create a 'roles' key in the event's output dictionary
 		if len(jRoles) > 0:
 			newDict["roles"] = jRoles
-
-		#
-		# Done getting player roles
-		#
 
 		# Record event team from json - use the team abbreviation, not home/away
 		# For face-offs, the json's event team is the winner
@@ -407,8 +374,8 @@ for gameId in gameIds:
 		# Prepare lists to store on-ice players
 		newDict["aSkaters"] = []
 		newDict["hSkaters"] = []
-		newDict["aGoalie"] = None
-		newDict["hGoalie"] = None
+		newDict["aG"] = None
+		newDict["hG"] = None
 
 		#
 		# Add event to event list
@@ -551,18 +518,24 @@ for gameId in gameIds:
 			elif hGCountPerSec[sec] == 0:
 				strSitSecs["ownGPulled"]["home"].add(sec)
 				strSitSecs["oppGPulled"]["away"].add(sec)
-			elif aSCountPerSec[sec] > hSCountPerSec[sec]:	# Cases with home PP and away SH (incl. 5v4, 5v3, 4v3)
+			elif aSCountPerSec[sec] > hSCountPerSec[sec] and aSCountPerSec[sec] >= 4 and hSCountPerSec[sec] >= 3:
+				# Cases with away PP and home SH (5v4, 5v3, 4v3)
 				aKey = "pp" + str(aSCountPerSec[sec]) + str(hSCountPerSec[sec])
 				hKey = "sh" + str(hSCountPerSec[sec]) + str(aSCountPerSec[sec])
 				strSitSecs[aKey]["away"].add(sec)
 				strSitSecs[hKey]["home"].add(sec)
-			elif aSCountPerSec[sec] < hSCountPerSec[sec]:	# Cases with away PP and home SH (incl. 5v4, 5v3, 4v3)
+			elif aSCountPerSec[sec] < hSCountPerSec[sec] and aSCountPerSec[sec] >= 3 and hSCountPerSec[sec] >= 4:
+				# Cases with home PP and away SH (5v4, 5v3, 4v3)
 				aKey = "sh" + str(aSCountPerSec[sec]) + str(hSCountPerSec[sec])
 				hKey = "pp" + str(hSCountPerSec[sec]) + str(aSCountPerSec[sec])
 				strSitSecs[aKey]["away"].add(sec)
 				strSitSecs[hKey]["home"].add(sec)
-			elif aSCountPerSec[sec] == hSCountPerSec[sec]:
+			elif aSCountPerSec[sec] == hSCountPerSec[sec] and aSCountPerSec[sec]:
 				key = "ev" + str(aSCountPerSec[sec])
+				strSitSecs[key]["away"].add(sec)
+				strSitSecs[key]["home"].add(sec)
+			else:
+				key = "other"
 				strSitSecs[key]["away"].add(sec)
 				strSitSecs[key]["home"].add(sec)
 
@@ -655,15 +628,102 @@ for gameId in gameIds:
 					if ev["time"] in nestedShifts[playerId][period]:	# Check if the event second is in the set of seconds that the place was on the ice
 						if nestedShifts[playerId]["position"] == "g":	# Store on-ice goalie
 							if nestedShifts[playerId]["iceSit"] == "home":
-								ev["hGoalie"] = playerId
+								ev["hG"] = playerId
 							elif nestedShifts[playerId]["iceSit"] == "away":
-								ev["aGoalie"] = playerId
-						else:											# Store on-ice skater
+								ev["aG"] = playerId
+						else:											# Store on-ice skater playerIds and skater counts
 							if nestedShifts[playerId]["iceSit"] == "home":
 								ev["hSkaters"].append(playerId)
+								ev["hSkaterCount"] = len(ev["hSkaters"])
 							elif nestedShifts[playerId]["iceSit"] == "away":
 								ev["aSkaters"].append(playerId)
+								ev["aSkaterCount"] = len(ev["aSkaters"])
 
+	#
+	#
+	# For each event, increment player and team stats
+	#
+	#
+
+	for ev in outEvents:
+
+		# Don't increment stats for events in regular season shoot-outs
+		if gameId < 30000 and ev["period"] >= 5:
+			continue
+		elif ev["type"] in ["goal", "shot", "missed_shot", "blocked_shot", "faceoff", "penalty"]:
+
+			aAbbrev = outTeams["away"]["abbrev"]
+			hAbbrev = outTeams["home"]["abbrev"]
+
+			#
+			# Get the score situation for each team
+			#
+
+			teamScoreSits = dict()	# Returns the score situation from the key-team's perspective
+			teamScoreSits[aAbbrev] = max(-3, min(3, ev["aScore"] - ev["hScore"]))
+			teamScoreSits[hAbbrev] = max(-3, min(3, ev["hScore"] - ev["aScore"]))
+
+			#
+			# Get the strength situation for each team
+			#
+			
+			teamStrengthSits = dict()	# Returns the strength situation from the key-team's perspective
+
+			if ev["aG"] is None:
+				teamStrengthSits[aAbbrev] = "ownGPulled"
+				teamStrengthSits[hAbbrev] = "oppGPulled"
+			elif ev["hG"] is None:
+				teamStrengthSits[aAbbrev] = "oppGPulled"
+				teamStrengthSits[hAbbrev] = "ownGPulled"
+			elif ev["aSkaterCount"] > ev["hSkaterCount"] and ev["aSkaterCount"] >= 4 and ev["hSkaterCount"] >= 3:
+				# Cases with away PP and home SH (5v4, 5v3, 4v3)
+				teamStrengthSits[aAbbrev] = "pp" + str(ev["aSkaterCount"]) + str(ev["hSkaterCount"])
+				teamStrengthSits[hAbbrev] = "sh" + str(ev["hSkaterCount"]) + str(ev["aSkaterCount"])
+			elif ev["aSkaterCount"] < ev["hSkaterCount"] and ev["aSkaterCount"] >= 3 and ev["hSkaterCount"] >= 4:
+				# Cases with home PP and away SH (5v4, 5v3, 4v3)
+				teamStrengthSits[aAbbrev] = "sh" + str(ev["aSkaterCount"]) + str(ev["hSkaterCount"])
+				teamStrengthSits[hAbbrev] = "pp" + str(ev["hSkaterCount"]) + str(ev["aSkaterCount"])
+			elif ev["aSkaterCount"] == ev["hSkaterCount"] and ev["aSkaterCount"] >= 3:
+				teamStrengthSits[aAbbrev] = "ev" + str(ev["aSkaterCount"])
+				teamStrengthSits[hAbbrev] = "ev" + str(ev["hSkaterCount"])
+			else:
+				teamStrengthSits[aAbbrev] = "other"
+				teamStrengthSits[hAbbrev] = "other"
+
+			#
+			# Increment individual stats
+			#
+
+			# Get the event team and opposing team, since some events affect an opponent's stats (e.g, blocked shots)
+			evTeam = ev["team"]
+			oppTeam = None
+			if evTeam == aAbbrev:
+				oppTeam = hAbbrev
+			elif evTeam == hAbbrev:
+				oppTeam = aAbbrev
+
+			if ev["type"] == "goal":
+				outPlayers[ev["roles"]["scorer"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ig"] += 1
+				outPlayers[ev["roles"]["scorer"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["is"] += 1
+				if "assist1" in ev["roles"]:
+					outPlayers[ev["roles"]["assist1"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ia1"] += 1
+				if "assist2" in ev["roles"]:
+					outPlayers[ev["roles"]["assist2"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ia2"] += 1
+			elif ev["type"] == "shot":
+				outPlayers[ev["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["is"] += 1
+			elif ev["type"] == "missed_shot":
+				outPlayers[ev["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ims"] += 1
+			elif ev["type"] == "blocked_shot":
+				outPlayers[ev["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ibs"] += 1
+				outPlayers[ev["roles"]["blocker"]][teamStrengthSits[oppTeam]][teamScoreSits[oppTeam]]["blocked"] += 1
+			elif ev["type"] == "penalty":
+				if "drewby" in ev["roles"]:
+					outPlayers[ev["roles"]["drewby"]][teamStrengthSits[oppTeam]][teamScoreSits[oppTeam]]["penDrawn"] += 1
+				if "penaltyon" in ev["roles"]:
+					outPlayers[ev["roles"]["penaltyon"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["penTaken"] += 1
+			elif ev["type"] == "faceoff":
+				outPlayers[ev["roles"]["winner"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["foWon"] += 1
+				outPlayers[ev["roles"]["loser"]][teamStrengthSits[oppTeam]][teamScoreSits[oppTeam]]["foLost"] += 1
 
 #
 # Done looping through each gameId
