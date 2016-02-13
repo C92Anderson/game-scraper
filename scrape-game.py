@@ -209,7 +209,7 @@ for gameId in gameIds:
 	#
 
 	scoreSits = [-3, -2, -1, 0, 1, 2, 3]
-	strengthSits = ["ownGPulled", "oppGPulled", "pk2", "pp2", "pk", "pp", "ev5", "ev4", "ev3"]
+	strengthSits = ["ownGPulled", "oppGPulled", "sh45", "sh35", "sh34", "pp54", "pp53", "pp43", "ev5", "ev4", "ev3", "other"]
 	
 	teamIceSits = dict()	# translates the team abbreviation to 'home' or 'away'
 	outTeams = dict()		# dictionary to store team information for output
@@ -486,58 +486,39 @@ for gameId in gameIds:
 						aSCountPerSec[sec] += 1
 
 		#
-		# For each strength situation, store the seconds (as a set) at which the situation occurred
+		# For each team's strength situations, store the seconds (as a set) at which the situation occurred
 		#
 
-		ownGPulledSecs = dict()
-		ownGPulledSecs["away"] = set()
-		ownGPulledSecs["home"] = set()
+		strSitSecs = dict()
+		for strSit in strengthSits:
+			strSitSecs[strSit] = dict()
+			strSitSecs[strSit]["home"] = set()
+			strSitSecs[strSit]["away"] = set()
 
-		ppSecs = dict()
-		ppSecs["away"] = set()
-		ppSecs["home"] = set()
-
-		pkSecs = dict()
-		pkSecs["away"] = set()
-		pkSecs["home"] = set()
-
-		pp2Secs = dict()
-		pp2Secs["away"] = set()
-		pp2Secs["home"] = set()
-
-		pk2Secs = dict()
-		pk2Secs["away"] = set()
-		pk2Secs["home"] = set()
-
-		ev3Secs = set()
-		ev4Secs = set()
-		ev5Secs = set()
-
+		# Loop through each second of the period, sec
+		# Check the number of goalies and skaters on the ice to determine the strength situation at time sec
+		# Add sec to the appropriate sets in strSitSecs
 		for sec in range(0, periodDurs[period]):
-			
 			if aGCountPerSec[sec] == 0:
-				ownGPulledSecs["away"].add(sec)
+				strSitSecs["ownGPulled"]["away"].add(sec)
+				strSitSecs["oppGPulled"]["home"].add(sec)
 			elif hGCountPerSec[sec] == 0:
-				ownGPulledSecs["home"].add(sec)
-			elif aSCountPerSec[sec] - hSCountPerSec[sec] == 1:
-				ppSecs["away"].add(sec)
-				pkSecs["home"].add(sec)
-			elif hSCountPerSec[sec] - aSCountPerSec[sec] == 1:
-				ppSecs["home"].add(sec)
-				pkSecs["away"].add(sec)
-			elif aSCountPerSec[sec] - hSCountPerSec[sec] == 2:
-				pp2Secs["away"].add(sec)
-				pk2Secs["home"].add(sec)
-			elif hSCountPerSec[sec] - aSCountPerSec[sec] == 2:
-				pp2Secs["home"].add(sec)
-				pk2Secs["away"].add(sec)
+				strSitSecs["ownGPulled"]["home"].add(sec)
+				strSitSecs["oppGPulled"]["away"].add(sec)
+			elif aSCountPerSec[sec] > hSCountPerSec[sec]:	# Cases with home PP and away SH (incl. 5v4, 5v3, 4v3)
+				aKey = "pp" + str(aSCountPerSec[sec]) + str(hSCountPerSec[sec])
+				hKey = "sh" + str(hSCountPerSec[sec]) + str(aSCountPerSec[sec])
+				strSitSecs[aKey]["away"].add(sec)
+				strSitSecs[hKey]["home"].add(sec)
+			elif aSCountPerSec[sec] < hSCountPerSec[sec]:	# Cases with away PP and home SH (incl. 5v4, 5v3, 4v3)
+				aKey = "sh" + str(aSCountPerSec[sec]) + str(hSCountPerSec[sec])
+				hKey = "pp" + str(hSCountPerSec[sec]) + str(aSCountPerSec[sec])
+				strSitSecs[aKey]["away"].add(sec)
+				strSitSecs[hKey]["home"].add(sec)
 			elif aSCountPerSec[sec] == hSCountPerSec[sec]:
-				if aSCountPerSec[sec] == 5:
-					ev5Secs.add(sec)
-				elif aSCountPerSec[sec] == 4:
-					ev4Secs.add(sec)
-				elif aSCountPerSec[sec] == 3:
-					ev3Secs.add(sec)
+				key = "ev" + str(aSCountPerSec[sec])
+				strSitSecs[key]["away"].add(sec)
+				strSitSecs[key]["home"].add(sec)
 
 		#
 		# Record the score differential at each second (the list index represents the number of seconds elapsed)
@@ -586,6 +567,8 @@ for gameId in gameIds:
 			scoreSitSecs["home"][hAdjScoreSit].add(sec)
 			scoreSitSecs["away"][aAdjScoreSit].add(sec)
 
+		
+
 		#
 		# Increment player toi for each score and strength situation
 		#
@@ -595,58 +578,21 @@ for gameId in gameIds:
 			# Convert each player's list of times when they were on the ice to a set, so that we can use intersections
 			nestedShifts[pId][period] = set(nestedShifts[pId][period])
 
-			if nestedShifts[pId]["team"] == outTeams["away"]["abbrev"]:	# Record tois for players on the AWAY team
-				# For each score situation, increment tois for each strength situation (increment because we're adding this period's toi to previous periods' tois)
-				for scoreSit in scoreSits:
-					outPlayers[pId]["ownGPulled"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ownGPulledSecs["away"], scoreSitSecs["away"][scoreSit]))
-					outPlayers[pId]["oppGPulled"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ownGPulledSecs["home"], scoreSitSecs["away"][scoreSit]))
-					outPlayers[pId]["pp"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ppSecs["away"], scoreSitSecs["away"][scoreSit]))
-					outPlayers[pId]["pk"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], pkSecs["away"], scoreSitSecs["away"][scoreSit]))
-					outPlayers[pId]["pp2"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], pp2Secs["away"], scoreSitSecs["away"][scoreSit]))
-					outPlayers[pId]["pk2"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], pk2Secs["away"], scoreSitSecs["away"][scoreSit]))
-					outPlayers[pId]["ev5"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev5Secs, scoreSitSecs["away"][scoreSit]))
-					outPlayers[pId]["ev4"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev4Secs, scoreSitSecs["away"][scoreSit]))
-					outPlayers[pId]["ev3"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev3Secs, scoreSitSecs["away"][scoreSit]))
+			iceSit = nestedShifts[pId]["iceSit"]
 
-			elif nestedShifts[pId]["team"] == outTeams["home"]["abbrev"]:	# Record tois for players on the HOME team
-				for scoreSit in scoreSits:
-					outPlayers[pId]["ownGPulled"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ownGPulledSecs["home"], scoreSitSecs["home"][scoreSit]))
-					outPlayers[pId]["oppGPulled"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ownGPulledSecs["away"], scoreSitSecs["home"][scoreSit]))
-					outPlayers[pId]["pp"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ppSecs["home"], scoreSitSecs["home"][scoreSit]))
-					outPlayers[pId]["pk"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], pkSecs["home"], scoreSitSecs["home"][scoreSit]))
-					outPlayers[pId]["pp2"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], pp2Secs["home"], scoreSitSecs["home"][scoreSit]))
-					outPlayers[pId]["pk2"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], pk2Secs["home"], scoreSitSecs["home"][scoreSit]))
-					outPlayers[pId]["ev5"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev5Secs, scoreSitSecs["home"][scoreSit]))
-					outPlayers[pId]["ev4"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev4Secs, scoreSitSecs["home"][scoreSit]))
-					outPlayers[pId]["ev3"][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], ev3Secs, scoreSitSecs["home"][scoreSit]))
+			# For each score situation, increment tois for each strength situation (increment because we're adding this period's toi to previous periods' tois)
+			for scoreSit in scoreSits:
+				for strSit in strengthSits:
+					outPlayers[pId][strSit][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], strSitSecs[strSit][iceSit], scoreSitSecs[iceSit][scoreSit]))
 
 		#
 		# Increment team toi for each score and strength situation
 		#
 
 		for scoreSit in scoreSits:
-
-			# Increment HOME team tois
-			outTeams["home"]["ownGPulled"][scoreSit]["toi"] += len(set.intersection(ownGPulledSecs["home"], scoreSitSecs["home"][scoreSit]))
-			outTeams["home"]["oppGPulled"][scoreSit]["toi"] += len(set.intersection(ownGPulledSecs["away"], scoreSitSecs["home"][scoreSit]))
-			outTeams["home"]["pp"][scoreSit]["toi"] += len(set.intersection(ppSecs["home"], scoreSitSecs["home"][scoreSit]))
-			outTeams["home"]["pk"][scoreSit]["toi"] += len(set.intersection(pkSecs["home"], scoreSitSecs["home"][scoreSit]))
-			outTeams["home"]["pp2"][scoreSit]["toi"] += len(set.intersection(pp2Secs["home"], scoreSitSecs["home"][scoreSit]))
-			outTeams["home"]["pk2"][scoreSit]["toi"] += len(set.intersection(pk2Secs["home"], scoreSitSecs["home"][scoreSit]))
-			outTeams["home"]["ev5"][scoreSit]["toi"] += len(set.intersection(ev5Secs, scoreSitSecs["home"][scoreSit]))
-			outTeams["home"]["ev4"][scoreSit]["toi"] += len(set.intersection(ev4Secs, scoreSitSecs["home"][scoreSit]))
-			outTeams["home"]["ev3"][scoreSit]["toi"] += len(set.intersection(ev3Secs, scoreSitSecs["home"][scoreSit]))
-
-			# Increment AWAY team tois
-			outTeams["away"]["ownGPulled"][scoreSit]["toi"] += len(set.intersection(ownGPulledSecs["away"], scoreSitSecs["away"][scoreSit]))
-			outTeams["away"]["oppGPulled"][scoreSit]["toi"] += len(set.intersection(ownGPulledSecs["home"], scoreSitSecs["away"][scoreSit]))
-			outTeams["away"]["pp"][scoreSit]["toi"] += len(set.intersection(ppSecs["away"], scoreSitSecs["away"][scoreSit]))
-			outTeams["away"]["pk"][scoreSit]["toi"] += len(set.intersection(pkSecs["away"], scoreSitSecs["away"][scoreSit]))
-			outTeams["away"]["pp2"][scoreSit]["toi"] += len(set.intersection(pp2Secs["away"], scoreSitSecs["away"][scoreSit]))
-			outTeams["away"]["pk2"][scoreSit]["toi"] += len(set.intersection(pk2Secs["away"], scoreSitSecs["away"][scoreSit]))
-			outTeams["away"]["ev5"][scoreSit]["toi"] += len(set.intersection(ev5Secs, scoreSitSecs["away"][scoreSit]))
-			outTeams["away"]["ev4"][scoreSit]["toi"] += len(set.intersection(ev4Secs, scoreSitSecs["away"][scoreSit]))
-			outTeams["away"]["ev3"][scoreSit]["toi"] += len(set.intersection(ev3Secs, scoreSitSecs["away"][scoreSit]))
+			for strSit in strengthSits:
+				for iceSit in ["away", "home"]:
+					outTeams[iceSit][strSit][scoreSit]["toi"] += len(set.intersection(strSitSecs[strSit][iceSit], scoreSitSecs[iceSit][scoreSit]))
 
 	#
 	# Done looping through each period and processing shifts
@@ -673,8 +619,6 @@ for gameId in gameIds:
 								ev["hSkaters"].append(playerId)
 							elif nestedShifts[playerId]["iceSit"] == "away":
 								ev["aSkaters"].append(playerId)
-
-	pprint(outEvents)
 
 
 #
