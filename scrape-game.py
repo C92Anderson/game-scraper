@@ -124,6 +124,12 @@ teamAbbrevs["los angeles kings"] = "lak"
 teamAbbrevs["san jose sharks"] = "sjs"
 teamAbbrevs["vancouver canucks"] = "van"
 
+#
+# Situations and stats to record
+#
+
+scoreSits = [-3, -2, -1, 0, 1, 2, 3]
+strengthSits = ["ownGPulled", "oppGPulled", "sh45", "sh35", "sh34", "pp54", "pp53", "pp43", "ev5", "ev4", "ev3", "other"]
 teamStats = ["toi", "gf", "ga", "sf", "sa", "bsf", "bsa", "msf", "msa", "foWon", "foLost", "ofo", "dfo", "nfo", "penTaken", "penDrawn"]
 playerStats = ["toi", "ig", "is", "ibs", "ims", "ia1", "ia2", "blocked", "gf", "ga", "sf", "sa", "bsf", "bsa", "msf", "msa", "foWon", "foLost", "ofo", "dfo", "nfo", "penTaken", "penDrawn"]
 
@@ -141,11 +147,16 @@ for gameId in gameIds:
 	print "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 	print "Processing game " + str(gameId)
 
-	# Data we need to record
-	gameDate = 0
+	# Dictionaries to store data from the input json
 	players = dict()
 	teams = dict()
 	events = dict()
+
+	# Dictionaries for output
+	gameDate = 0
+	outPlayers = dict()
+	outTeams = dict()
+	outEvents = []
 
 	#
 	#
@@ -207,12 +218,8 @@ for gameId in gameIds:
 	# Prepare team output
 	#
 	#
-
-	scoreSits = [-3, -2, -1, 0, 1, 2, 3]
-	strengthSits = ["ownGPulled", "oppGPulled", "sh45", "sh35", "sh34", "pp54", "pp53", "pp43", "ev5", "ev4", "ev3", "other"]
 	
 	teamIceSits = dict()	# translates the team abbreviation to 'home' or 'away'
-	outTeams = dict()		# dictionary to store team information for output
 
 	for iceSit in teams:	# iceSit = 'home' or 'away'
 
@@ -236,7 +243,6 @@ for gameId in gameIds:
 	#
 	#
 
-	outPlayers = dict()
 	for pId in players:
 		outPlayers[pId] = dict()
 		outPlayers[pId]["position"] = players[pId]["primaryPosition"]["abbreviation"].lower()
@@ -258,9 +264,6 @@ for gameId in gameIds:
 	#
 
 	print "Processing json events"
-
-	# Prepare list of events for output
-	outEvents = []
 
 	# Create a dictionary to store periodTypes (used when we output the shifts to the shifts csv)
 	periodTypes = dict()
@@ -284,6 +287,49 @@ for gameId in gameIds:
 		if "coordinates" in jEv and len(jEv["coordinates"]) == 2:
 			newDict["locX"] = jEv["coordinates"]["x"]
 			newDict["locY"] = jEv["coordinates"]["y"]
+
+			#
+			#
+			# If coordinates exist, translate coordinates to zones
+			#
+			#
+
+			#
+			# Determine whether the home team's defensive zone has x < 0 or x > 0
+			# Starting in 2014-2015, teams switch ends prior to the start of OT in the regular season
+			#
+
+			hDefZoneIsNegX = None
+			if newDict["period"] % 2 == 0:	# For even-numbered periods (2, 4, etc.), the home team's def. zone has x > 0
+				hDefZoneIsNegX = False
+			else:							# For even-numbered periods (1, 3, etc.), the home team's def. zone has x < 0
+				hDefZoneIsNegX = True
+
+			# Exceptions
+			# For the Winter Classic on Jan 1, 2015, teams switched sides at the 10 minute mark of the first period
+			if seasonArg == 20142015 and gameId == 20556:
+				if newDict["period"] == 1 and newDict["time"] < 10 * 60:
+					hDefZoneIsNegX = True
+				elif newDict["period"] == 1 and newDict["time"] >= 10 * 60:
+					hDefZoneIsNegX = False
+
+			#
+			# Store the event's zone from the home team's perspective
+			#
+
+			# Redlines are located at x = -25 and +25
+			if newDict["locX"] >= -25 and newDict["locX"] <= 25:
+				newDict["hZone"] = "n"
+			elif hDefZoneIsNegX == True:
+				if newDict["locX"] < -25:
+					newDict["hZone"] = "d"
+				elif newDict["locX"] > 25:
+					newDict["hZone"] = "o"
+			elif hDefZoneIsNegX == False:
+				if newDict["locX"] < -25:
+					newDict["hZone"] = "o"
+				elif newDict["locX"] > 25:
+					newDict["hZone"] = "d"
 
 		# Record players and their roles
 		# Some additional processing required:
@@ -365,7 +411,7 @@ for gameId in gameIds:
 		newDict["hGoalie"] = None
 
 		#
-		# Add event to list
+		# Add event to event list
 		#
 
 		outEvents.append(copy.deepcopy(newDict))
@@ -567,8 +613,6 @@ for gameId in gameIds:
 			scoreSitSecs["home"][hAdjScoreSit].add(sec)
 			scoreSitSecs["away"][aAdjScoreSit].add(sec)
 
-		
-
 		#
 		# Increment player toi for each score and strength situation
 		#
@@ -600,7 +644,7 @@ for gameId in gameIds:
 
 	#
 	#
-	# Append on-ice skaters and goalies to the event data
+	# Based on the shift data, append on-ice skaters and goalies to the event data
 	#
 	#
 	
