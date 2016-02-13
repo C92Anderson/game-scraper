@@ -27,20 +27,6 @@ def outputVal(d, k):
 	else:
 		return str(d[k])
 
-# The json team abbreviations are different from the html ones:
-# N.J (html) -> NJD (json); S.J -> SJS; T.B -> TBL; L.A -> LAK
-def useNewTeamAbbrev(abbrev):
-	if abbrev == "n.j":
-		return "njd"
-	elif abbrev == "s.j":
-		return "sjs"
-	elif abbrev == "t.b":
-		return "tbl"
-	elif abbrev == "l.a":
-		return "lak"
-	else:
-		return abbrev
-
 #
 # 
 # Get user arguments
@@ -304,9 +290,8 @@ for gameId in gameIds:
 
 		# Record players and their roles
 		# Some additional processing required:
-		# 	For goals, the json simply lists "assist" for both assisters. Enhance this to "assist1" and "assist2" to match the html roles we created above
-		#	For giveaways and takeaways, the json uses role "PlayerID". Convert this to "giver" and "taker" to match the html roles we created above
-		#	For saved shots, the json lists the goalie with role "Goalie". The HTML pbp doesn't include the goalie in the event description, so remove this role from the json
+		# 	For goals, the json simply lists "assist" for both assisters - enhance this to "assist1" and "assist2"
+		#	For giveaways and takeaways, the json uses role "PlayerID" - convert this to "giver" and "taker"
 		#	For "puck over glass" penalties, there seems to be a bug:
 		#		The json description in 2015020741 is: Braden Holtby Delaying Game - Puck over glass served by Alex Ovechkin
 		#		However, Ovechkin is given the playerType: "DrewBy" -- we're going to correct this by giving him type "ServedBy"
@@ -329,9 +314,7 @@ for gameId in gameIds:
 
 			jRoles[role] = jP["player"]["id"]
 		
-		if newDict["type"] == "shot":
-			del jRoles["goalie"]
-		elif newDict["type"] == "penalty":
+		if newDict["type"] == "penalty":
 			if newDict["subtype"].lower().find("puck over glass") >= 0:
 				if "servedby" not in jRoles and "drewby" in jRoles:
 					jRoles["servedby"] = jRoles["drewby"]
