@@ -334,7 +334,7 @@ for gameId in gameIds:
 		if len(jRoles) > 0:
 			newDict["roles"] = jRoles
 
-		# Record event team from json - use the team abbreviation, not home/away
+		# Record event team and iceSit sfrom json - use the team abbreviation, not home/away
 		# For face-offs, the json's event team is the winner
 		# For blocked shots, the json's event team is the blocking team - we want to change this to the shooting team
 		# For penalties, the json's event team is the team who took the penalty
@@ -345,6 +345,11 @@ for gameId in gameIds:
 					newDict["team"] = outTeams["away"]["abbrev"]
 				elif newDict["team"] == outTeams["away"]["abbrev"]:
 					newDict["team"] = outTeams["home"]["abbrev"]
+
+			if newDict["team"] == outTeams["home"]["abbrev"]:
+				newDict["iceSit"] = "home"
+			elif newDict["team"] == outTeams["away"]["abbrev"]:
+				newDict["iceSit"] = "away"
 
 		# Record period types
 		if newDict["period"] not in periodTypes:
@@ -1089,6 +1094,61 @@ for gameId in gameIds:
 		outFile.write(outString.encode("utf-8"))
 
 	outFile.close()
+
+	#
+	#
+	# Load csv files into database
+	#
+	#
+
+	print "- - - - -"
+
+	# Connect to database
+	databaseUser = dbconfig.user
+	databasePasswd = dbconfig.passwd
+	databaseHost = dbconfig.host
+	database = dbconfig.database
+	connection = mysql.connector.connect(user=databaseUser, passwd=databasePasswd, host=databaseHost, database=database)
+	cursor = connection.cursor()
+
+	# Load csv files into database
+	# Use a dictionary to link csv file names (key) with table names (value)
+	filesToLoad = dict()
+	filesToLoad["-events.csv"] = "game_events"
+	filesToLoad["-players.csv"] = "game_player_stats"
+	filesToLoad["-teams.csv"] = "game_team_stats"
+	filesToLoad["-shifts.csv"] = "game_shifts"
+	filesToLoad["-rosters.csv"] = "game_rosters"
+
+	for fileToLoad in filesToLoad:
+		fname = outDir + str(seasonArg) + "-" + str(gameId) + fileToLoad
+		query = ("LOAD DATA LOCAL INFILE '" + fname + "'"
+			+ " REPLACE INTO TABLE " + filesToLoad[fileToLoad]
+			+ " FIELDS TERMINATED BY ',' ENCLOSED BY '\"'"
+			+ " LINES TERMINATED BY '\\n'"
+			+ " IGNORE 1 LINES")
+		print "Loading " + fname + " into database"
+		cursor.execute(query)
+
+	#
+	# Insert game result into database using a prepared statement
+	#
+
+	cursor = connection.cursor(prepared=True) # Enable support for prepared statements
+
+	try:
+		timeRemaining = linescore["currentPeriodTimeRemaining"].lower()
+	except:
+		timeRemaining = linescore["currentPeriodTimeRemaining"]
+
+	query = ("REPLACE INTO game_result (season, date, gameId, aTeam, hTeam, aFinal, hFinal, lastPeriodNumber, lastPeriodName, lastPeriodTimeRemaining)"
+		+ " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+	args = (seasonArg, gameDate, gameId, outTeams["away"]["abbrev"], outTeams["home"]["abbrev"], linescore["teams"]["away"]["goals"], linescore["teams"]["home"]["goals"], linescore["currentPeriod"], linescore["currentPeriodOrdinal"].lower(), timeRemaining,)
+	cursor.execute(query, args)
+
+	# Close connection
+	cursor.close()
+	connection.close()
 
 	print "Done processing game " + str(gameId)
 	print "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
