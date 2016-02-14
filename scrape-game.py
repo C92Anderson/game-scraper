@@ -6,7 +6,6 @@ import json
 import copy
 import re
 from pprint import pprint
-from bs4 import BeautifulSoup
 
 # For loading csv files into database
 import mysql.connector
@@ -183,16 +182,11 @@ for gameId in gameIds:
 	# Prepare team output
 	#
 	#
-	
-	teamIceSits = dict()	# translates the team abbreviation to 'home' or 'away'
 
 	for iceSit in teams:	# iceSit = 'home' or 'away'
 
 		outTeams[iceSit] = dict()
 		outTeams[iceSit]["abbrev"] = teams[iceSit]["abbreviation"].lower()	# team name abbreviation
-		outTeams[iceSit]["playerIds"] = []									# list of playerIds
-
-		teamIceSits[outTeams[iceSit]["abbrev"]] = iceSit
 
 		# Initialize stats
 		for strSit in strengthSits:
@@ -208,11 +202,27 @@ for gameId in gameIds:
 	#
 	#
 
+	# Remove inactive players from the boxscore's player's list
+	# In the pbp json for 2015020002, both Stoll and Etem have #26, but Etem has no stats and doesn't appear in any events
+	for iceSit in rosters:							# 'iceSit' will be 'home' or 'away'
+		for player in rosters[iceSit]["players"]:	# 'player' will be 'ID#' where # is a playerId
+			if "stats" not in rosters[iceSit]["players"][player] or len(rosters[iceSit]["players"][player]["stats"]) == 0:
+				del players[(int(rosters[iceSit]["players"][player]["person"]["id"]))]	# Remove the inactive player from the 'players' dictionary
+
+	# Prepare the output dictionary outPlayers
 	for pId in players:
 		outPlayers[pId] = dict()
 		outPlayers[pId]["position"] = players[pId]["primaryPosition"]["abbreviation"].lower()
 		outPlayers[pId]["firstName"] = players[pId]["firstName"]
 		outPlayers[pId]["lastName"] = players[pId]["lastName"]
+
+		# Get the player's team, iceSit, and jersey number
+		for iceSit in rosters:	# 'iceSit' will be 'home' or 'away'
+			rosterKey = "ID" + str(pId)
+			if rosterKey in rosters[iceSit]["players"]:
+				outPlayers[pId]["team"] = outTeams[iceSit]["abbrev"]
+				outPlayers[pId]["iceSit"] = iceSit
+				outPlayers[pId]["jersey"] = rosters[iceSit]["players"][rosterKey]["jerseyNumber"]
 
 		# Initialize stats
 		for strSit in strengthSits:
@@ -691,6 +701,7 @@ for gameId in gameIds:
 				if "assist2" in ev["roles"]:
 					outPlayers[ev["roles"]["assist2"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ia2"] += 1
 			elif ev["type"] == "shot":
+				# A "goalie" role also exists for saved shots, but we ignore this
 				outPlayers[ev["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["is"] += 1
 			elif ev["type"] == "missed_shot":
 				outPlayers[ev["roles"]["shooter"]][teamStrengthSits[evTeam]][teamScoreSits[evTeam]]["ims"] += 1
@@ -716,7 +727,6 @@ for gameId in gameIds:
 				hPlayers.extend(ev["hSkaters"])
 			if "hG" in ev:
 				hPlayers.append(ev["hG"])
-			print hPlayers
 
 			for pId in hPlayers:
 				if ev["type"] == "goal":
@@ -844,7 +854,245 @@ for gameId in gameIds:
 				elif evTeam == aAbbrev:
 					outTeams["away"][teamStrengthSits[aAbbrev]][teamScoreSits[aAbbrev]]["foWon"] += 1
 					outTeams["home"][teamStrengthSits[hAbbrev]][teamScoreSits[hAbbrev]]["foLost"] += 1
-		
+	
+	#
+	# Done incrementing player and team stats
+	#
+
+	#
+	#
+	# Prepare output files that will be loaded into the database
+	# Use .encode("utf-8") when writing the output string to handle accents in player names and French descriptions
+	#
+	#
+
+	print "- - - - -"
+	print "Preparing csv files"
+
+	#
+	# Output shifts
+	#
+
+	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-shifts.csv", "w")
+	outString = "season,date,gameId,team,iceSit,playerId,position,period,periodType,start,end\n"
+	outFile.write(outString)
+
+	for sh in shifts:
+		outString = str(seasonArg)
+		outString += "," + str(gameDate)
+		outString += "," + str(gameId)
+		outString += "," + nestedShifts[sh["playerId"]]["team"]
+		outString += "," + nestedShifts[sh["playerId"]]["iceSit"]
+		outString += "," + str(sh["playerId"])
+		outString += "," + nestedShifts[pId]["position"]
+		outString += "," + str(sh["period"])
+		outString += "," + periodTypes[sh["period"]]
+		outString += "," + str(toSecs(sh["startTime"]))
+		outString += "," + str(toSecs(sh["endTime"]))
+		outString += "\n"
+		outFile.write(outString.encode("utf-8"))
+
+	outFile.close()
+
+	#
+	# Output events
+	#
+
+	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-events.csv", "w")
+	outString = "season,date,gameId,eventId,"
+	outString += "period,periodType,time,aScore,hScore,aSkaters,hSkaters,hZone,locX,locY,"
+	outString += "desc,type,subtype,"
+	outString += "team,teamIceSit,"	# team is the event team; teamIceSit is home/away for the event team
+	outString += "p1,p2,p3,p1Role,p2Role,p3Role,"
+	outString += "aS1,aS2,aS3,aS4,aS5,aS6,aG,"
+	outString += "hS1,hS2,hS3,hS4,hS5,hS6,hG\n"
+	outFile.write(outString)
+
+	for ev in outEvents:
+
+		outString = str(seasonArg)
+		outString += "," + str(gameDate)
+		outString += "," + str(gameId)
+		outString += "," + str(ev["id"])
+
+		outString += "," + str(ev["period"])
+		outString += "," + str(ev["periodType"])
+		outString += "," + str(ev["time"])
+		outString += "," + str(ev["aScore"])
+		outString += "," + str(ev["hScore"])
+		outString += "," + outputVal(ev, "aSkaterCount")
+		outString += "," + outputVal(ev, "hSkaterCount")
+		outString += "," + outputVal(ev, "hZone")
+		outString += "," + outputVal(ev, "locX")
+		outString += "," + outputVal(ev, "locY")
+
+		outString += "," + ev["description"].replace(",", ";") # Replace commas to maintain the csv structure
+		outString += "," + ev["type"]
+		outString += "," + outputVal(ev, "subtype")
+
+		outString += "," + outputVal(ev, "team")
+		outString += "," + outputVal(ev, "iceSit")
+
+		#
+		# Process roles
+		#
+
+		if "roles" not in ev:
+			outString += ",NULL,NULL,NULL,NULL,NULL,NULL"
+		else:
+			pIdString = ""
+			roleString = ""
+			# Append playerIds and roles
+			roleCount = 0
+			for role in ev["roles"]:
+				pIdString += "," + str(ev["roles"][role])
+				roleString += "," + role
+				roleCount += 1
+			# If there are less than 3 playerIds, pad the shortage with NULL values
+			while roleCount < 3:
+				pIdString += ",NULL"
+				roleString += ",NULL"
+				roleCount += 1
+			# Add the playerIds and roles to the output
+			outString += pIdString + roleString
+
+		#
+		# Append on-ice playerIds and goalieIds
+		# Start with the AWAY team
+		#
+
+		for prefix in ["a", "h"]:
+
+			# SKATERS
+			pIdString = ""
+			if (prefix + "Skaters") not in ev:
+				outString += ",NULL,NULL,NULL,NULL,NULL,NULL"
+			else:
+				# Append playerIds
+				count = 0
+				for pId in ev[prefix + "Skaters"]:
+					pIdString += "," + str(pId)
+					count += 1
+				# If there are less than 6 skater playerIds, pad the shortage with NULLs
+				while count < 6:
+					pIdString += ",NULL"
+					count += 1
+			outString += pIdString
+
+			# GOALIE
+			outString += "," + outputVal(ev, prefix + "G")
+
+		# Write event to output file
+		outString += "\n"
+		outFile.write(outString.encode("utf-8"))
+
+	outFile.close()
+
+	#
+	# Output team stats
+	#
+
+	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-teams.csv", "w")
+	outString = "season,date,gameId,team,iceSit,strengthSit,scoreSit"
+	for stat in teamStats:
+		outString += "," + stat
+	outString += "\n"
+	outFile.write(outString)
+
+	for iceSit in outTeams:
+		for strSit in strengthSits:
+			for scSit in outTeams[iceSit][strSit]:
+				outString = str(seasonArg)
+				outString += "," + str(gameDate)
+				outString += "," + str(gameId)
+				outString += "," + outTeams[iceSit]["abbrev"]
+				outString += "," + iceSit
+				outString += "," + strSit
+				outString += "," + str(scSit)
+
+				# Append each stat to the output string
+				# If all stats are equal to 0, then don't output the record
+				allZero = True
+				for stat in teamStats:
+					outString += "," + str(outTeams[iceSit][strSit][scSit][stat])
+					if outTeams[iceSit][strSit][scSit][stat] != 0:
+						allZero = False
+				outString += "\n"
+
+				if allZero == False:
+					outFile.write(outString.encode("utf-8"))
+					
+	outFile.close()
+
+	#
+	# Output player stats
+	#
+
+	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-players.csv", "w")
+	outString = "season,date,gameId,team,iceSit,playerId,position,strengthSit,scoreSit"
+	for stat in playerStats:
+		outString += "," + stat
+	outString += "\n"
+	outFile.write(outString)
+
+	for pId in outPlayers:
+		for strSit in strengthSits:
+			for scSit in outPlayers[pId][strSit]:
+				outString = str(seasonArg)
+				outString += "," + str(gameDate)
+				outString += "," + str(gameId)
+				outString += "," + outPlayers[pId]["team"]
+				outString += "," + outPlayers[pId]["iceSit"]
+				outString += "," + str(pId)
+				outString += "," + outPlayers[pId]["position"]
+				outString += "," + strSit
+				outString += "," + str(scSit)
+
+				# Append each stat to the output string
+				# If all stats are equal to 0, then don't output the record
+				allZero = True
+				for stat in playerStats:
+					outString += "," + str(outPlayers[pId][strSit][scSit][stat])
+					if outPlayers[pId][strSit][scSit][stat] != 0:
+						allZero = False
+				outString += "\n"
+
+				if allZero == False:
+					outFile.write(outString.encode("utf-8"))
+
+	outFile.close()
+
+	#
+	# Output rosters
+	#
+
+	outFile = open(outDir + str(seasonArg) + "-" + str(gameId) + "-rosters.csv", "w")
+	outString = "season,date,gameId,team,iceSit,playerId,firstName,lastName,jersey,position\n"
+	outFile.write(outString)
+
+	for pId in outPlayers:
+
+		outString = str(seasonArg)
+		outString += "," + str(gameDate)
+		outString += "," + str(gameId)
+
+		outString += "," + outTeams[outPlayers[pId]["iceSit"]]["abbrev"]
+		outString += "," + outPlayers[pId]["iceSit"]
+
+		outString += "," + str(pId)
+		outString += "," + outPlayers[pId]["firstName"]
+		outString += "," + outPlayers[pId]["lastName"]
+		outString += "," + outPlayers[pId]["jersey"]
+		outString += "," + outPlayers[pId]["position"]
+
+		outString += "\n"
+		outFile.write(outString.encode("utf-8"))
+
+	outFile.close()
+
+	print "Done processing game " + str(gameId)
+	print "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
+
 #
 # Done looping through each gameId
 #
