@@ -263,7 +263,7 @@ for gameId in gameIds:
 		# Record penalty-specific information
 		if newDict["type"] == "penalty":
 			newDict["penSeverity"] = jEv["result"]["penaltySeverity"].lower()
-			newDict["penaltyMinutes"] = jEv["result"]["penaltyMinutes"]	
+			newDict["penMins"] = jEv["result"]["penaltyMinutes"]	
 
 		if "coordinates" in jEv and len(jEv["coordinates"]) == 2:
 			newDict["locX"] = jEv["coordinates"]["x"]
@@ -691,7 +691,6 @@ for gameId in gameIds:
 
 		adjAOnIce = None
 		adjHOnIce = None
-
 		if ev["type"] == "faceoff":
 			adjAOnIce = aOnIce - aOnIceEnding
 			adjHOnIce = hOnIce - hOnIceEnding
@@ -708,7 +707,6 @@ for gameId in gameIds:
 					ev["aSkaters"] = []
 				ev["aSkaters"].append(pId)
 				ev["aSkaterCount"] = len(ev["aSkaters"])
-
 		for pId in adjHOnIce:
 			if nestedShifts[pId]["position"] == "g":
 				ev["hG"] = pId
@@ -1015,6 +1013,11 @@ for gameId in gameIds:
 		outString += "," + outputVal(ev, "locY")
 
 		outString += "," + ev["description"].replace(",", ";") # Replace commas to maintain the csv structure
+
+		# For penalties, append the severity and duration to the description
+		if ev["type"] == "penalty":
+			outString += " -- " + ev["penSeverity"].replace(",", ";") + " -- " + str(ev["penMins"])
+
 		outString += "," + ev["type"]
 		outString += "," + outputVal(ev, "subtype")
 
@@ -1183,7 +1186,7 @@ for gameId in gameIds:
 	# Load csv files into database
 	#
 	#
-	sys.exit()
+
 	print "- - - - -"
 	print "Loading csv files into database"
 
