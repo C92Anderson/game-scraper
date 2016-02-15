@@ -400,7 +400,7 @@ for gameId in gameIds:
 
 	shifts = copy.deepcopy(jsonDict["data"])
 
-	# Only use shift objects with detailCode = 0. Non-zero detailCodes describe goals
+	# Only use shift objects with detailCode = 0; non-zero detailCodes describe goals
 	shifts = [shift for shift in shifts if shift["detailCode"] == 0]
 
 	# Ignore any SO shift data in regular season games (period 5)
@@ -802,8 +802,8 @@ for gameId in gameIds:
 
 	for ev in outEvents:
 
-		# Don't increment stats for events in regular season shoot-outs
-		if gameId < 30000 and ev["period"] >= 5:
+		# Don't increment stats for events in shoot-outs
+		if ev["periodType"] == "shootout":
 			continue
 		elif ev["type"] in ["goal", "shot", "missed_shot", "blocked_shot", "faceoff", "penalty"]:
 
