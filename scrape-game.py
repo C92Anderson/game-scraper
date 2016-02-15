@@ -717,10 +717,63 @@ for gameId in gameIds:
 				ev["hSkaterCount"] = len(ev["hSkaters"])
 
 	#
+	# For penalty shots, update the on-ice skater lists so that only the shooter and goalie are on the ice
+	#
+
+	for ev in outEvents:
+
+		if ev["type"] == "penalty" and ev["penSeverity"] == "penalty shot":
+
+			# Find shots that occurred at the same time as the penalty call (exclude blocked shots, since that can't be a penalty shot result)
+			# There may be cases where the player got a shot off before the penalty call, which might produce 2 shots at the same timepoint: the original shot, and the penalty shot
+			matchingShotEvs = []
+			for ev1 in outEvents:
+				if ev1["type"] in ["goal", "shot", "missed_shot"] and ev1["period"] == ev["period"] and ev1["time"] == ev["time"]:
+					matchingShotEvs.append(ev1)
+
+			# Since the order of outEvents is preserved, if there's multiple matching shots, identify the last shot as the penalty shot
+			penShotEv = matchingShotEvs[len(matchingShotEvs) - 1]
+			
+			# Identify penalty shots in the event description
+			penShotEv["description"] += " -- penalty shot"
+
+			savingTeam = None
+			shootingTeam = None
+			if ev["team"] == outTeams["away"]["abbrev"]:	# If the away team committed the penalty
+				savingTeam = "a"
+				shootingTeam = "h"
+			elif ev["team"] == outTeams["home"]["abbrev"]:	# If the home team committed the penalty
+				savingTeam = "h"
+				shootingTeam = "a"
+
+			# The shooting team should not have a goalie on the ice
+			if shootingTeam + "G" in penShotEv:
+				del penShotEv[shootingTeam + "G"]
+
+			# The shooting team should only have the shooter on the ice
+			if penShotEv["type"] in ["shot", "missed_shot"]:
+				penShotEv[shootingTeam + "Skaters"] = [penShotEv["roles"]["shooter"]]
+			elif penShotEv["type"] == "goal":
+				penShotEv[shootingTeam + "Skaters"] = [penShotEv["roles"]["scorer"]]
+
+			# The saving team should not have any skaters on the ice
+			if savingTeam + "Skaters" in penShotEv:
+				del penShotEv[savingTeam + "Skaters"]
+
+			# The saving team should only have its goalie on the ice
+			# If the shot was saved, then use the goalie listed under 'roles'. For goals and missed shots, use the goalie listed in the shift data
+			if penShotEv["type"] == "shot":
+				penShotEv[savingTeam + "G"] = penShotEv["roles"]["goalie"]
+
+	#
 	#
 	# For each event, increment player and team stats
 	#
 	#
+
+	for ev in outEvents:
+		if ev["type"] in ["shot", "missed_shot"]:
+			pprint(ev)
 
 	for ev in outEvents:
 
