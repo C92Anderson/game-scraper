@@ -403,6 +403,10 @@ for gameId in gameIds:
 	# Only use shift objects with detailCode = 0. Non-zero detailCodes describe goals
 	shifts = [shift for shift in shifts if shift["detailCode"] == 0]
 
+	# Ignore any SO shift data in regular season games (period 5)
+	if gameId < 30000:
+		shifts = [shift for shift in shifts if shift["period"] <= 4]
+
 	jsonDict.clear()
 
 	nestedShifts = dict()
@@ -423,45 +427,42 @@ for gameId in gameIds:
 		start = toSecs(s["startTime"])
 		end = toSecs(s["endTime"])
 
-		# Ignore SO for regular season games
-		if (gameId < 30000 and period <= 4) or gameId >= 30000:
+		# If the playerId doesn't already exist, then create a new dictionary for the player and store some player properties
+		if pId not in nestedShifts:
+			nestedShifts[pId] = dict()
+			nestedShifts[pId]["position"] = outPlayers[pId]["position"]
+			nestedShifts[pId]["team"] = s["teamAbbrev"].lower()
 
-			# If the playerId doesn't already exist, then create a new dictionary for the player and store some player properties
-			if pId not in nestedShifts:
-				nestedShifts[pId] = dict()
-				nestedShifts[pId]["position"] = outPlayers[pId]["position"]
-				nestedShifts[pId]["team"] = s["teamAbbrev"].lower()
+			if nestedShifts[pId]["team"] == outTeams["home"]["abbrev"]:
+				nestedShifts[pId]["iceSit"] = "home"
+			elif nestedShifts[pId]["team"] == outTeams["away"]["abbrev"]:
+				nestedShifts[pId]["iceSit"] = "away"
 
-				if nestedShifts[pId]["team"] == outTeams["home"]["abbrev"]:
-					nestedShifts[pId]["iceSit"] = "home"
-				elif nestedShifts[pId]["team"] == outTeams["away"]["abbrev"]:
-					nestedShifts[pId]["iceSit"] = "away"
+		# Record the maxPeriod
+		if period > maxPeriod:
+			maxPeriod = period
 
-			# Record the maxPeriod
-			if period > maxPeriod:
-				maxPeriod = period
+		# Record the period lengths by tracking the maximum shift end time
+		if period not in periodDurs:
+			periodDurs[period] = 0
 
-			# Record the period lengths by tracking the maximum shift end time
-			if period not in periodDurs:
-				periodDurs[period] = 0
+		if end > periodDurs[period]:
+			periodDurs[period] = end
 
-			if end > periodDurs[period]:
-				periodDurs[period] = end
+		# Create a dictionary entry for each period
+		# The key is the period number (integer) and 2 lists are stored:
+		# 1. In "#Set" (where # is a period), the nth second when a player was the ice is stored
+		# 		The list of times is 0-based: a player on the ice from 00:00 to 00:05 will have the following entries in the list: 0, 1, 2, 3, 4
+		#		This is used to calculate TOIs (the player was on the ice for 5 seconds)
+		# 2. in "#Ranges", the [start, end] time of each shift is stored
+		#		For a shift from 00:00 to 00:05, [0,5] will be stored
+		#		This is used to find on-ice players for events (any event occurring at 00:00, 00:01,..., 00:05) might be attributed to this player's shift
+		if str(period) + "Set" not in nestedShifts[pId]:
+			nestedShifts[pId][str(period) + "Set"] = []
+			nestedShifts[pId][str(period) + "Ranges"] = []
 
-			# Create a dictionary entry for each period
-			# The key is the period number (integer) and 2 lists are stored:
-			# 1. In "#Set" (where # is a period), the nth second when a player was the ice is stored
-			# 		The list of times is 0-based: a player on the ice from 00:00 to 00:05 will have the following entries in the list: 0, 1, 2, 3, 4
-			#		This is used to calculate TOIs (the player was on the ice for 5 seconds)
-			# 2. in "#Ranges", the [start, end] time of each shift is stored
-			#		For a shift from 00:00 to 00:05, [0,5] will be stored
-			#		This is used to find on-ice players for events (any event occurring at 00:00, 00:01,..., 00:05) might be attributed to this player's shift
-			if str(period) + "Set" not in nestedShifts[pId]:
-				nestedShifts[pId][str(period) + "Set"] = []
-				nestedShifts[pId][str(period) + "Ranges"] = []
-
-			nestedShifts[pId][str(period) + "Ranges"].append([start, end])
-			nestedShifts[pId][str(period) + "Set"].extend(range(start, end))
+		nestedShifts[pId][str(period) + "Ranges"].append([start, end])
+		nestedShifts[pId][str(period) + "Set"].extend(range(start, end))
 
 	#
 	# Some players may not have played for an entire period
@@ -627,29 +628,31 @@ for gameId in gameIds:
 
 	#
 	#
-	# Based on the shift data, append on-ice skaters and goalies to the event data
+	# Based on the shift data, append on-ice skaters and goalies to events during regulation and overtime
 	#
 	#
 	
 	for ev in outEvents:
 
 		# Don't append skaters to these events
-		if ev["type"] in ["game_scheduled", "period_start", "period_ready", "period_end", "period_official", "game_end", "game_official"]:
+		if ev["type"] in ["game_scheduled", "period_start", "period_ready", "period_end", "period_official", "game_end", "game_official", "shootout_complete"]:
 			continue
+		elif ev["periodType"] in ["regular", "overtime"]:
 
-		#
-		# At second s (when the event occurred), get the players: on-ice, starting their shift, ending their shift
-		#
+			#
+			# At second s (when the event occurred), get the players: on-ice, starting their shift, ending their shift
+			#
 
-		hOnIce = set()
-		aOnIce = set()
-		aOnIceEnding = set()
-		hOnIceEnding= set()
-		aOnIceStarting = set()
-		hOnIceStarting = set()
+			hOnIce = set()
+			aOnIce = set()
+			aOnIceEnding = set()
+			hOnIceEnding= set()
+			aOnIceStarting = set()
+			hOnIceStarting = set()
 
-		for pId in nestedShifts:
-			for shift in nestedShifts[pId][str(ev["period"]) + "Ranges"]:
+			for pId in nestedShifts:
+
+				for shift in nestedShifts[pId][str(ev["period"]) + "Ranges"]:
 
 					# Players on ice at second s
 					if shift[0] <= ev["time"] and shift[1] >= ev["time"]:
@@ -672,55 +675,68 @@ for gameId in gameIds:
 						elif nestedShifts[pId]["iceSit"] == "home":
 							hOnIceStarting.add(pId)
 
-		#
-		# Record the on-ice players
-		# Case 1: Faceoffs
-		#	Attribute faceoffs to players who are in the middle of their shift (onIce) and players starting their shift (onIceStarting)
-		# Case 2: Non face-off events
-		#	Attribute all other events to players who in the middle of their shift (onIce) and players ending their shift (onIceEnding)
-		#	With this approach, we're saying that the players who are ending their shift at time t had more to do with the event at time t than those starting their shift at time t
-		#	This is somewhat inaccurate for penalty shots - the html pbp will only list the shooter and goalie, but since we aren't counting penalty shots as corsis, we won't worry about this
-		# Example 1: Penalty shots will have 3 pbp entries:
-		#	1. The penalty - case 2 handles this
-		#	2. The penalty shot - case 2 handles this
-		#	3. The ensuing faceoff - case 1 handles this
-		# Example 2: Faceoffs at the start of a period are handled by case 1 (all players will be starting their shift)
-		# Example 3: Shots that occur at the same time players end/start shifts are handled by case 2
-		# Example 4: For any event that occurs at time t without a shift end/start, the onIceStarting and onIceEnding sets are empty, so both case 1 and case 2 work
-		#
+			#
+			# Record the on-ice players
+			# Case 1: Faceoffs
+			#	Attribute faceoffs to players who are in the middle of their shift (onIce) and players starting their shift (onIceStarting)
+			# Case 2: Non face-off events
+			#	Attribute all other events to players who in the middle of their shift (onIce) and players ending their shift (onIceEnding)
+			#	With this approach, we're saying that the players who are ending their shift at time t had more to do with the event at time t than those starting their shift at time t
+			#	This is somewhat inaccurate for penalty shots - the html pbp will only list the shooter and goalie, but since we aren't counting penalty shots as corsis, we won't worry about this
+			# Example 1: Penalty shots will have 3 pbp entries:
+			#	1. The penalty - case 2 handles this
+			#	2. The penalty shot - case 2 handles this
+			#	3. The ensuing faceoff - case 1 handles this
+			# Example 2: Faceoffs at the start of a period are handled by case 1 (all players will be starting their shift)
+			# Example 3: Shots that occur at the same time players end/start shifts are handled by case 2
+			# Example 4: For any event that occurs at time t without a shift end/start, the onIceStarting and onIceEnding sets are empty, so both case 1 and case 2 work
+			#
 
-		adjAOnIce = None
-		adjHOnIce = None
-		if ev["type"] == "faceoff":
-			adjAOnIce = aOnIce - aOnIceEnding
-			adjHOnIce = hOnIce - hOnIceEnding
-		else:
-			adjAOnIce = aOnIce - aOnIceStarting
-			adjHOnIce = hOnIce - hOnIceStarting
+			adjAOnIce = None
+			adjHOnIce = None
+			if ev["type"] == "faceoff":
+				adjAOnIce = aOnIce - aOnIceEnding
+				adjHOnIce = hOnIce - hOnIceEnding
+			else:
+				adjAOnIce = aOnIce - aOnIceStarting
+				adjHOnIce = hOnIce - hOnIceStarting
 
-		# Store the away and home lists of on-ice players
-		for pId in adjAOnIce:
-			if nestedShifts[pId]["position"] == "g":
-				ev["aG"] = pId
-			else:
-				if "aSkaters" not in ev:
-					ev["aSkaters"] = []
-				ev["aSkaters"].append(pId)
-				ev["aSkaterCount"] = len(ev["aSkaters"])
-		for pId in adjHOnIce:
-			if nestedShifts[pId]["position"] == "g":
-				ev["hG"] = pId
-			else:
-				if "hSkaters" not in ev:
-					ev["hSkaters"] = []
-				ev["hSkaters"].append(pId)
-				ev["hSkaterCount"] = len(ev["hSkaters"])
+			# Store the away and home lists of on-ice players
+			for pId in adjAOnIce:
+				if nestedShifts[pId]["position"] == "g":
+					ev["aG"] = pId
+				else:
+					if "aSkaters" not in ev:
+						ev["aSkaters"] = []
+					ev["aSkaters"].append(pId)
+					ev["aSkaterCount"] = len(ev["aSkaters"])
+			for pId in adjHOnIce:
+				if nestedShifts[pId]["position"] == "g":
+					ev["hG"] = pId
+				else:
+					if "hSkaters" not in ev:
+						ev["hSkaters"] = []
+					ev["hSkaters"].append(pId)
+					ev["hSkaterCount"] = len(ev["hSkaters"])
 
 	#
-	# For penalty shots, update the on-ice skater lists so that only the shooter and goalie are on the ice
+	# Done first pass at appending on-ice skaters to the event data
+	#
+
+	#
+	# For penalty shots and shootouts, update the on-ice skater lists so that only the shooter and goalie are on the ice
 	#
 
 	for ev in outEvents:
+
+		#
+		# Find penalty shots and shootout shot events
+		#
+
+		shotEv = None
+		isPenShotOrShootoutShot = False
+		savingTeam = None
+		shootingTeam = None
 
 		if ev["type"] == "penalty" and ev["penSeverity"] == "penalty shot":
 
@@ -732,38 +748,47 @@ for gameId in gameIds:
 					matchingShotEvs.append(ev1)
 
 			# Since the order of outEvents is preserved, if there's multiple matching shots, identify the last shot as the penalty shot
-			penShotEv = matchingShotEvs[len(matchingShotEvs) - 1]
+			shotEv = matchingShotEvs[len(matchingShotEvs) - 1]
 			
 			# Identify penalty shots in the event description
-			penShotEv["description"] += " -- penalty shot"
+			shotEv["description"] += " -- penalty shot"
+			isPenShotOrShootoutShot = True
 
-			savingTeam = None
-			shootingTeam = None
-			if ev["team"] == outTeams["away"]["abbrev"]:	# If the away team committed the penalty
-				savingTeam = "a"
-				shootingTeam = "h"
-			elif ev["team"] == outTeams["home"]["abbrev"]:	# If the home team committed the penalty
-				savingTeam = "h"
+		elif ev["periodType"] == "shootout" and ev["type"] in ["shot", "missed_shot", "goal"]:
+			shotEv = ev
+			isPenShotOrShootoutShot = True
+
+		#
+		# Append on-ice players to the penalty shot or shootout shot event
+		#
+
+		if isPenShotOrShootoutShot == True:
+
+			if shotEv["team"] == outTeams["away"]["abbrev"]:	# If the away team is shooting
 				shootingTeam = "a"
+				savingTeam = "h"
+			elif shotEv["team"] == outTeams["home"]["abbrev"]:	# If the home team is shooting
+				shootingTeam = "h"
+				savingTeam = "a"
 
 			# The shooting team should not have a goalie on the ice
-			if shootingTeam + "G" in penShotEv:
-				del penShotEv[shootingTeam + "G"]
+			if shootingTeam + "G" in shotEv:
+				del shotEv[shootingTeam + "G"]
 
 			# The shooting team should only have the shooter on the ice
-			if penShotEv["type"] in ["shot", "missed_shot"]:
-				penShotEv[shootingTeam + "Skaters"] = [penShotEv["roles"]["shooter"]]
-			elif penShotEv["type"] == "goal":
-				penShotEv[shootingTeam + "Skaters"] = [penShotEv["roles"]["scorer"]]
+			if shotEv["type"] in ["shot", "missed_shot"]:
+				shotEv[shootingTeam + "Skaters"] = [shotEv["roles"]["shooter"]]
+			elif shotEv["type"] == "goal":
+				shotEv[shootingTeam + "Skaters"] = [shotEv["roles"]["scorer"]]
 
 			# The saving team should not have any skaters on the ice
-			if savingTeam + "Skaters" in penShotEv:
-				del penShotEv[savingTeam + "Skaters"]
+			if savingTeam + "Skaters" in shotEv:
+				del shotEv[savingTeam + "Skaters"]
 
 			# The saving team should only have its goalie on the ice
 			# If the shot was saved, then use the goalie listed under 'roles'. For goals and missed shots, use the goalie listed in the shift data
-			if penShotEv["type"] == "shot":
-				penShotEv[savingTeam + "G"] = penShotEv["roles"]["goalie"]
+			if shotEv["type"] == "shot":
+				shotEv[savingTeam + "G"] = shotEv["roles"]["goalie"]
 
 	#
 	#
@@ -817,6 +842,7 @@ for gameId in gameIds:
 				teamStrengthSits[aAbbrev] = "ev" + str(ev["aSkaterCount"])
 				teamStrengthSits[hAbbrev] = "ev" + str(ev["hSkaterCount"])
 			else:
+				# "other" includes penalty shots, where a single goalie and skater are on the ice
 				teamStrengthSits[aAbbrev] = "other"
 				teamStrengthSits[hAbbrev] = "other"
 
