@@ -399,6 +399,10 @@ for gameId in gameIds:
 	inFile.close()
 
 	shifts = copy.deepcopy(jsonDict["data"])
+
+	# Only use shift objects with detailCode = 0. Non-zero detailCodes describe goals
+	shifts = [shift for shift in shifts if shift["detailCode"] == 0]
+
 	jsonDict.clear()
 
 	nestedShifts = dict()
@@ -627,214 +631,93 @@ for gameId in gameIds:
 	#
 	#
 	
-	# Create nested dictionaries that use period and time as keys, and a list of events that occurred at that time as the value
-	nestedEvents = dict()
-	for period in range(1, maxPeriod + 1):
-		nestedEvents[period] = dict()
-
 	for ev in outEvents:
-		if ev["time"] not in nestedEvents[ev["period"]]:
-			nestedEvents[ev["period"]][ev["time"]] = []
-		nestedEvents[ev["period"]][ev["time"]].append(ev)
 
-	# Enhance the events with on-ice skaters 
-	for period in range(1, maxPeriod + 1):
-		for sec in nestedEvents[period]:
+		# Don't append skaters to these events
+		if ev["type"] in ["game_scheduled", "period_start", "period_ready", "period_end", "period_official", "game_end", "game_official"]:
+			continue
 
-			# Get sets of away and home players that were on-ice at second s - use sets to prevent duplicate entries
-			hOnIce = set()
-			aOnIce = set()
-			aOnIceEnding = set()
-			hOnIceEnding= set()
-			aOnIceStarting = set()
-			hOnIceStarting = set()
+		#
+		# At second s (when the event occurred), get the players: on-ice, starting their shift, ending their shift
+		#
 
-			for pId in nestedShifts:
-				for shift in nestedShifts[pId][str(period) + "Ranges"]:
+		hOnIce = set()
+		aOnIce = set()
+		aOnIceEnding = set()
+		hOnIceEnding= set()
+		aOnIceStarting = set()
+		hOnIceStarting = set()
+
+		for pId in nestedShifts:
+			for shift in nestedShifts[pId][str(ev["period"]) + "Ranges"]:
 
 					# Players on ice at second s
-					if shift[0] <= sec and shift[1] >= sec:
+					if shift[0] <= ev["time"] and shift[1] >= ev["time"]:
 						if nestedShifts[pId]["iceSit"] == "away":
 							aOnIce.add(pId)
 						elif nestedShifts[pId]["iceSit"] == "home":
 							hOnIce.add(pId)
 
 					# Players on ice that are ending their shift at second s
-					if shift[1] == sec:
+					if shift[1] == ev["time"]:
 						if nestedShifts[pId]["iceSit"] == "away":
 							aOnIceEnding.add(pId)
 						elif nestedShifts[pId]["iceSit"] == "home":
 							hOnIceEnding.add(pId)
 
 					# Players on ice that are starting their shift at second s
-					if shift[0] == sec:
+					if shift[0] == ev["time"]:
 						if nestedShifts[pId]["iceSit"] == "away":
 							aOnIceStarting.add(pId)
 						elif nestedShifts[pId]["iceSit"] == "home":
 							hOnIceStarting.add(pId)
 
-			# Convert sets back to lists
-			# hOnIce = list(hOnIce)
-			# aOnIce = list(aOnIce)
-			# aOnIceEnding = list(aOnIceEnding)
-			# hOnIceEnding = list(hOnIceEnding)
-			# aOnIceStarting = list(aOnIceStarting)
-			# hOnIceStarting = list(hOnIceStarting)
+		#
+		# Record the on-ice players
+		# Case 1: Faceoffs
+		#	Attribute faceoffs to players who are in the middle of their shift (onIce) and players starting their shift (onIceStarting)
+		# Case 2: Non face-off events
+		#	Attribute all other events to players who in the middle of their shift (onIce) and players ending their shift (onIceEnding)
+		#	With this approach, we're saying that the players who are ending their shift at time t had more to do with the event at time t than those starting their shift at time t
+		#	This is somewhat inaccurate for penalty shots - the html pbp will only list the shooter and goalie, but since we aren't counting penalty shots as corsis, we won't worry about this
+		# Example 1: Penalty shots will have 3 pbp entries:
+		#	1. The penalty - case 2 handles this
+		#	2. The penalty shot - case 2 handles this
+		#	3. The ensuing faceoff - case 1 handles this
+		# Example 2: Faceoffs at the start of a period are handled by case 1 (all players will be starting their shift)
+		# Example 3: Shots that occur at the same time players end/start shifts are handled by case 2
+		# Example 4: For any event that occurs at time t without a shift end/start, the onIceStarting and onIceEnding sets are empty, so both case 1 and case 2 work
+		#
 
+		adjAOnIce = None
+		adjHOnIce = None
 
-			# CASE 1: Single event at second s, and it coincides with shift changes
-			#	Attribute the event to onIce - onIceStarting
-			#	This works even if it doesn't coincide with shift changes, because onIceStarting will be empty
-			# CASE 2: Multiple events at second s, and it coincides with shift changes
-			#	For faceoff events, attribute the faceoff to onIce - onIceEnding
-			#		Check if there's any cases with multiple faceoffs (check if there's a STOP event that corresponds to improper faceoffs, because the on-ice players for these should be the same as the faceoff players)
-			# 	For all other events, attribute the events to onIce - onIceStarting
-			#	Case 2 includes faceoffs at the start of the period - other events like period_start and period_official occur at the same time
-			# CASE 3: Penalty shots - these have 3 events listed:
-			#	1. The penalty - list onIce - onIceStarting players (same as case 2)
-			#	2. The penalty shot - list the shooter and goalie (exception to case 2); get this from the json roles
-			#	3. The ensuing faceoff - list onIce - onIceEnding players (same as case 2)
+		if ev["type"] == "faceoff":
+			adjAOnIce = aOnIce - aOnIceEnding
+			adjHOnIce = hOnIce - hOnIceEnding
+		else:
+			adjAOnIce = aOnIce - aOnIceStarting
+			adjHOnIce = hOnIce - hOnIceStarting
 
-			# adjAOnIce = None
-			# adjHOnIce = None
-			# if len(nestedEvents[period][sec]) == 1:		# CASE 1
+		# Store the away and home lists of on-ice players
+		for pId in adjAOnIce:
+			if nestedShifts[pId]["position"] == "g":
+				ev["aG"] = pId
+			else:
+				if "aSkaters" not in ev:
+					ev["aSkaters"] = []
+				ev["aSkaters"].append(pId)
+				ev["aSkaterCount"] = len(ev["aSkaters"])
 
-			# 	ev = nestedEvents[period][sec][0]
+		for pId in adjHOnIce:
+			if nestedShifts[pId]["position"] == "g":
+				ev["hG"] = pId
+			else:
+				if "hSkaters" not in ev:
+					ev["hSkaters"] = []
+				ev["hSkaters"].append(pId)
+				ev["hSkaterCount"] = len(ev["hSkaters"])
 
-			# 	adjAOnIce = aOnIce - aOnIceStarting
-			# 	adjHOnIce = hOnIce - hOnIceStarting
-
-			# 	# Store the list of adjusted on-ice players
-			# 	for pId in adjAOnIce:
-			# 		if nestedShifts[pId]["position"] == "g":
-			# 			ev["aG"] = pId
-			# 		else:
-			# 			if "aSkaters" not in ev:
-			# 				ev["aSkaters"] = []
-			# 			ev["aSkaters"].append(pId)
-			# 			ev["aSkaterCount"] = len(ev["aSkaters"])
-
-			# 	for pId in adjHOnIce:
-			# 		if nestedShifts[pId]["position"] == "g":
-			# 			ev["hG"] = pId
-			# 		else:
-			# 			if "hSkaters" not in ev:
-			# 				ev["hSkaters"] = []
-			# 			ev["hSkaters"].append(pId)
-			# 			ev["hSkaterCount"] = len(ev["hSkaters"])
-
-			# elif len(nestedEvents[period][sec]) > 1:	# CASE 2
-
-			# 	penaltyShotFound = False
-			# 	faceoffsFound = 0
-			# 	for ev in nestedEvents[period][sec]:
-			# 		if ev["type"] == "penalty" and ev["penSeverity"] == "penalty shot":
-			# 			penaltyShotFound = True
-			# 		if ev["type"] == "faceoff":
-			# 			faceoffsFound += 1
-
-			# 	if faceoffsFound > 1:
-			# 		print str(faceoffsFound) + " faceoffs found!"
-
-			# 	if penaltyShotFound == False:
-			# 		for ev in nestedEvents[period][sec]:
-			# 			if ev["type"] == "faceoff":
-			# 				adjAOnIce = aOnIce - aOnIceEnding
-			# 				adjHOnIce = hOnIce - hOnIceEnding
-			# 			else:
-			# 				adjAOnIce = aOnIce - aOnIceStarting
-			# 				adjHOnIce = hOnIce - hOnIceStarting
-
-			# 			# Store the list of adjusted on-ice players
-			# 			for pId in adjAOnIce:
-			# 				if nestedShifts[pId]["position"] == "g":
-			# 					ev["aG"] = pId
-			# 				else:
-			# 					if "aSkaters" not in ev:
-			# 						ev["aSkaters"] = []
-			# 					ev["aSkaters"].append(pId)
-			# 					ev["aSkaterCount"] = len(ev["aSkaters"])
-
-			# 			for pId in adjHOnIce:
-			# 				if nestedShifts[pId]["position"] == "g":
-			# 					ev["hG"] = pId
-			# 				else:
-			# 					if "hSkaters" not in ev:
-			# 						ev["hSkaters"] = []
-			# 					ev["hSkaters"].append(pId)
-			# 					ev["hSkaterCount"] = len(ev["hSkaters"])
-
-			# 	elif penaltyShotFound == True:
-			# 		for ev in nestedEvents[period][sec]:
-			# 			if ev["type"] == "faceoff":
-			# 				adjAOnIce = aOnIce - aOnIceEnding
-			# 				adjHOnIce = hOnIce - hOnIceEnding
-			# 			elif ev["type"] == "shot":
-			# 				#adjAOnIce = "shooter or goalie"
-			# 				#adjHOnIce = "shooter or goalie"
-			# 				adjAOnIce = aOnIce - aOnIceStarting
-			# 				adjHOnIce = hOnIce - hOnIceStarting
-			# 			else: 
-			# 				adjAOnIce = aOnIce - aOnIceStarting
-			# 				adjHOnIce = hOnIce - hOnIceStarting
-
-			# 			# Store the list of adjusted on-ice players
-			# 			for pId in adjAOnIce:
-			# 				if nestedShifts[pId]["position"] == "g":
-			# 					ev["aG"] = pId
-			# 				else:
-			# 					if "aSkaters" not in ev:
-			# 						ev["aSkaters"] = []
-			# 					ev["aSkaters"].append(pId)
-			# 					ev["aSkaterCount"] = len(ev["aSkaters"])
-
-			# 			for pId in adjHOnIce:
-			# 				if nestedShifts[pId]["position"] == "g":
-			# 					ev["hG"] = pId
-			# 				else:
-			# 					if "hSkaters" not in ev:
-			# 						ev["hSkaters"] = []
-			# 					ev["hSkaters"].append(pId)
-			# 					ev["hSkaterCount"] = len(ev["hSkaters"])
-
-			# ALTERNATIVELY
-			# Case 1: Attribute faceoffs to onIce - onIceEnding
-			# Case 2: Attribute all other events to onIce - onIceStarting
-			for ev in nestedEvents[period][sec]:
-
-				if ev["type"] not in ["period_ready", "period_official", "game_end", "game_scheduled"]:	# Don't append skaters to these events
-					adjAOnIce = None
-					adjHOnIce = None
-
-					if ev["type"] == "faceoff" or ev["type"] == "period_start":
-						adjAOnIce = aOnIce - aOnIceEnding
-						adjHOnIce = hOnIce - hOnIceEnding
-					else:
-						adjAOnIce = aOnIce - aOnIceStarting
-						adjHOnIce = hOnIce - hOnIceStarting
-
-					# Store the list of on-ice players
-					for pId in adjAOnIce:
-						if nestedShifts[pId]["position"] == "g":
-							ev["aG"] = pId
-						else:
-							if "aSkaters" not in ev:
-								ev["aSkaters"] = []
-							ev["aSkaters"].append(pId)
-							ev["aSkaterCount"] = len(ev["aSkaters"])
-
-					for pId in adjHOnIce:
-						if nestedShifts[pId]["position"] == "g":
-							ev["hG"] = pId
-						else:
-							if "hSkaters" not in ev:
-								ev["hSkaters"] = []
-							ev["hSkaters"].append(pId)
-							ev["hSkaterCount"] = len(ev["hSkaters"])
-
-					print str(ev["aSkaterCount"]) + " -- " + str(ev["hSkaterCount"])
-
-	pprint(outEvents)
 	#
 	#
 	# For each event, increment player and team stats
