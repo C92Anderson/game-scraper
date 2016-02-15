@@ -243,12 +243,13 @@ for gameId in gameIds:
 	# Create a dictionary to store periodTypes (used when we output the shifts to the shifts csv)
 	periodTypes = dict()
 
-	for jEv in events:
+	for i, jEv in enumerate(events):
 
 		newDict = dict()
 
 		# Create a dictionary for this event
 		newDict["id"] = jEv["about"]["eventIdx"]
+		newDict["order"] = i
 
 		newDict["period"] = jEv["about"]["period"]
 		newDict["periodType"] = jEv["about"]["periodType"].lower()
@@ -439,12 +440,19 @@ for gameId in gameIds:
 				periodDurs[period] = end
 
 			# Create a dictionary entry for each period
-			# The key is the period number (integer) and the value is a list of seconds when the player was on the ice
-			# The list of times is 0-based: a player on the ice from 00:00 to 00:05 will have the following entries in the list: 0, 1, 2, 3, 4
-			if period not in nestedShifts[pId]:
-				nestedShifts[pId][period] = []
+			# The key is the period number (integer) and 2 lists are stored:
+			# 1. In "#Set" (where # is a period), the nth second when a player was the ice is stored
+			# 		The list of times is 0-based: a player on the ice from 00:00 to 00:05 will have the following entries in the list: 0, 1, 2, 3, 4
+			#		This is used to calculate TOIs (the player was on the ice for 5 seconds)
+			# 2. in "#Ranges", the [start, end] time of each shift is stored
+			#		For a shift from 00:00 to 00:05, [0,5] will be stored
+			#		This is used to find on-ice players for events (any event occurring at 00:00, 00:01,..., 00:05) might be attributed to this player's shift
+			if str(period) + "Set" not in nestedShifts[pId]:
+				nestedShifts[pId][str(period) + "Set"] = []
+				nestedShifts[pId][str(period) + "Ranges"] = []
 
-			nestedShifts[pId][period].extend(range(start, end))
+			nestedShifts[pId][str(period) + "Ranges"].append([start, end])
+			nestedShifts[pId][str(period) + "Set"].extend(range(start, end))
 
 	#
 	# Some players may not have played for an entire period
@@ -453,8 +461,9 @@ for gameId in gameIds:
 
 	for pId in nestedShifts:
 		for period in range(1, maxPeriod + 1):
-			if period not in nestedShifts[pId]:
-				nestedShifts[pId][period] = []
+			if str(period) + "Set" not in nestedShifts[pId]:
+				nestedShifts[pId][str(period) + "Set"] = []
+				nestedShifts[pId][str(period) + "Ranges"] = []
 
 	#
 	# Process the shifts, one period at a time
@@ -477,17 +486,17 @@ for gameId in gameIds:
 		for pId in nestedShifts:
 			if nestedShifts[pId]["iceSit"] == "home":
 				if nestedShifts[pId]["position"] == "g":
-					for sec in nestedShifts[pId][period]:
+					for sec in nestedShifts[pId][str(period) + "Set"]:
 						hGCountPerSec[sec] += 1
 				else:
-					for sec in nestedShifts[pId][period]:
+					for sec in nestedShifts[pId][str(period) + "Set"]:
 						hSCountPerSec[sec] += 1
 			elif nestedShifts[pId]["iceSit"] == "away":
 				if nestedShifts[pId]["position"] == "g":
-					for sec in nestedShifts[pId][period]:
+					for sec in nestedShifts[pId][str(period) + "Set"]:
 						aGCountPerSec[sec] += 1
 				else:
-					for sec in nestedShifts[pId][period]:
+					for sec in nestedShifts[pId][str(period) + "Set"]:
 						aSCountPerSec[sec] += 1
 
 		#
@@ -585,14 +594,14 @@ for gameId in gameIds:
 		for pId in nestedShifts:
 
 			# Convert each player's list of times when they were on the ice to a set, so that we can use intersections
-			nestedShifts[pId][period] = set(nestedShifts[pId][period])
+			nestedShifts[pId][str(period) + "Set"] = set(nestedShifts[pId][str(period) + "Set"])
 
 			iceSit = nestedShifts[pId]["iceSit"]
 
 			# For each score situation, increment tois for each strength situation (increment because we're adding this period's toi to previous periods' tois)
 			for scoreSit in scoreSits:
 				for strSit in strengthSits:
-					outPlayers[pId][strSit][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][period], strSitSecs[strSit][iceSit], scoreSitSecs[iceSit][scoreSit]))
+					outPlayers[pId][strSit][scoreSit]["toi"] += len(set.intersection(nestedShifts[pId][str(period) + "Set"], strSitSecs[strSit][iceSit], scoreSitSecs[iceSit][scoreSit]))
 
 		#
 		# Increment team toi for each score and strength situation
@@ -613,27 +622,149 @@ for gameId in gameIds:
 	#
 	#
 	
-	for playerId in nestedShifts:					# Loop through each player
-		for period in range(1, maxPeriod + 1):		# Loop through each of the player's periods; can't use 'for period in nestedShifts["player"] because there's other keys (team, iceSit, position)
-			for ev in outEvents:										# Loop through all events to find events for which the player was on the ice
-				if ev["period"] == period:								# We only care about events in the same period as the shifts we're currently looking at
-					if ev["time"] in nestedShifts[playerId][period]:	# Check if the event second is in the set of seconds that the place was on the ice
-						if nestedShifts[playerId]["position"] == "g":	# Store on-ice goalie
-							if nestedShifts[playerId]["iceSit"] == "home":
-								ev["hG"] = playerId
-							elif nestedShifts[playerId]["iceSit"] == "away":
-								ev["aG"] = playerId
-						else:											# Store on-ice skater playerIds and skater counts
-							if nestedShifts[playerId]["iceSit"] == "home":
-								if "hSkaters" not in ev:				# Create list if it doesn't already exist
-									ev["hSkaters"] = []
-								ev["hSkaters"].append(playerId)
-								ev["hSkaterCount"] = len(ev["hSkaters"])
-							elif nestedShifts[playerId]["iceSit"] == "away":
-								if "aSkaters" not in ev:				# Create list if it doesn't already exist
+	# Create nested dictionaries that use period and time as keys, and a list of events that occurred at that time as the value
+	nestedEvents = dict()
+	for period in range(1, maxPeriod + 1):
+		nestedEvents[period] = dict()
+
+	for ev in outEvents:
+		if ev["time"] not in nestedEvents[ev["period"]]:
+			nestedEvents[ev["period"]][ev["time"]] = []
+		nestedEvents[ev["period"]][ev["time"]].append(ev)
+
+	# Enhance the events with on-ice skaters 
+	for period in range(1, maxPeriod + 1):
+		for sec in nestedEvents[period]:
+
+			# Get sets of away and home players that were on-ice at second s - use sets to prevent duplicate entries
+			hOnIce = set()
+			aOnIce = set()
+			aOnIceEnding = set()
+			hOnIceEnding= set()
+			aOnIceStarting = set()
+			hOnIceStarting = set()
+
+			for pId in nestedShifts:
+				for shift in nestedShifts[pId][str(period) + "Ranges"]:
+
+					# Players on ice at second s
+					if shift[0] <= sec and shift[1] >= sec:
+						if nestedShifts[pId]["iceSit"] == "away":
+							aOnIce.add(pId)
+						elif nestedShifts[pId]["iceSit"] == "home":
+							hOnIce.add(pId)
+
+					# Players on ice that are ending their shift at second s
+					if shift[1] == sec:
+						if nestedShifts[pId]["iceSit"] == "away":
+							aOnIceEnding.add(pId)
+						elif nestedShifts[pId]["iceSit"] == "home":
+							hOnIceEnding.add(pId)
+
+					# Players on ice that are starting their shift at second s
+					if shift[0] == sec:
+						if nestedShifts[pId]["iceSit"] == "away":
+							aOnIceStarting.add(pId)
+						elif nestedShifts[pId]["iceSit"] == "home":
+							hOnIceStarting.add(pId)
+
+			# Convert sets back to lists
+			# hOnIce = list(hOnIce)
+			# aOnIce = list(aOnIce)
+			# aOnIceEnding = list(aOnIceEnding)
+			# hOnIceEnding = list(hOnIceEnding)
+			# aOnIceStarting = list(aOnIceStarting)
+			# hOnIceStarting = list(hOnIceStarting)
+
+			#
+			# If multiple events occurred at second s, we need to figure out who was on-ice for each event
+			# To do this, we'll use face-offs as the breakpoint:
+			# -	For events before the face-off, we'll use the players on-ice at s-1
+			# - For the face-off and the events after the face-off, we'll use the players on-ice at s+1
+			# If there's only a single event at second s, then use the players on-ice at s
+			#
+
+			if len(nestedEvents[period][sec]) == 1:
+				# Use skaters at second s
+				ev = nestedEvents[period][sec][0]
+				for pId in aOnIce:
+					if nestedShifts[pId]["position"] == "g":
+						ev["aG"] = pId
+					else:
+						if "aSkaters" not in ev:
+							ev["aSkaters"] = []
+						ev["aSkaters"].append(pId)
+						ev["aSkaterCount"] = len(ev["aSkaters"])
+						if ev["aSkaterCount"] > 6:
+							print str(ev["period"]), str(ev["time"]), str(ev["description"]), str(ev["aSkaters"])
+				for pId in hOnIce:
+					if nestedShifts[pId]["position"] == "g":
+						ev["hG"] = pId
+					else:
+						if "hSkaters" not in ev:
+							ev["hSkaters"] = []
+						ev["hSkaters"].append(pId)
+						ev["hSkaterCount"] = len(ev["hSkaters"])
+			elif len(nestedEvents[period][sec]) > 1:
+
+				# Look for the *first* faceoff to use as the breakpoint
+				faceoffIdx = None
+				for i, ev in enumerate(nestedEvents[period][sec]):
+					if faceoffIdx is None and ev["type"] == "faceoff":
+						faceoffIdx = i
+				
+				if faceoffIdx is None:
+					# Use skaters at second s
+					for pId in aOnIce:
+						if nestedShifts[pId]["position"] == "g":
+							ev["aG"] = pId
+						else:
+							if "aSkaters" not in ev:
+								ev["aSkaters"] = []
+							ev["aSkaters"].append(pId)
+							ev["aSkaterCount"] = len(ev["aSkaters"])
+					for pId in hOnIce:
+						if nestedShifts[pId]["position"] == "g":
+							ev["hG"] = pId
+						else:
+							if "hSkaters" not in ev:
+								ev["hSkaters"] = []
+							ev["hSkaters"].append(pId)
+							ev["hSkaterCount"] = len(ev["hSkaters"])
+				else:
+					# Append the on-ice players to each event at second s
+					for i, ev in enumerate(nestedEvents[period][sec]):
+
+						adjAOnIce = None
+						adjHOnIce = None
+						if i < faceoffIdx:
+							# For events before the faceoff breakpoint,
+							# remove the players who started their shift at time t from the list of on-ice players
+							adjAOnIce = aOnIce - aOnIceStarting
+							adjHOnIce = hOnIce - hOnIceStarting
+						elif i >= faceoffIdx:
+							# For the faceoff breakpoint and events afterwards,
+							# remove the players who ended their shift at time t from the list of on-ice players
+							adjAOnIce = aOnIce - aOnIceEnding
+							adjHOnIce = hOnIce - hOnIceEnding
+
+						for pId in adjAOnIce:
+							if nestedShifts[pId]["position"] == "g":
+								ev["aG"] = pId
+							else:
+								if "aSkaters" not in ev:
 									ev["aSkaters"] = []
-								ev["aSkaters"].append(playerId)
+								ev["aSkaters"].append(pId)
 								ev["aSkaterCount"] = len(ev["aSkaters"])
+
+						for pId in adjHOnIce:
+							if nestedShifts[pId]["position"] == "g":
+								ev["hG"] = pId
+							else:
+								if "hSkaters" not in ev:
+									ev["hSkaters"] = []
+								ev["hSkaters"].append(pId)
+								ev["hSkaterCount"] = len(ev["hSkaters"])
 
 	#
 	#
@@ -1100,8 +1231,9 @@ for gameId in gameIds:
 	# Load csv files into database
 	#
 	#
-
+	sys.exit()
 	print "- - - - -"
+	print "Loading csv files into database"
 
 	# Connect to database
 	databaseUser = dbconfig.user
