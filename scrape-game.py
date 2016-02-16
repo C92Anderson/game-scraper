@@ -101,6 +101,9 @@ playerStats = ["toi", "ig", "is", "ibs", "ims", "ia1", "ia2", "blocked", "gf", "
 # foLost: team lost face-offs, individually lost face-offs
 # ig, is, ibs, ims, ia1, ia2: individual goals, shots, blocked shots, missed shots, primary assists, secondary assists
 # blocked: shots blocked by the individual
+# penDrawn and penTaken don't account for delayed penalties - this is apparent in the team stats:
+#	If teamA draws a penalty but gets a chance to pull their goalie and play for a few seconds before the penalty is actually called, the penDrawn stat will be counted towards the "ownGPulled" situation
+#	Similarly, teamB's penTaken stat will be counted towards the "oppGPulled" situation
 
 for gameId in gameIds:
 
