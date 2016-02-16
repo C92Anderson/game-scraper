@@ -797,10 +797,6 @@ for gameId in gameIds:
 	#
 
 	for ev in outEvents:
-		if ev["type"] in ["shot", "missed_shot"]:
-			pprint(ev)
-
-	for ev in outEvents:
 
 		# Don't increment stats for events in shoot-outs
 		if ev["periodType"] == "shootout":
@@ -994,7 +990,7 @@ for gameId in gameIds:
 				if evTeam == hAbbrev:
 					outTeams["home"][teamStrengthSits[hAbbrev]][teamScoreSits[hAbbrev]]["penTaken"] += 1
 					outTeams["away"][teamStrengthSits[aAbbrev]][teamScoreSits[aAbbrev]]["penDrawn"] += 1
-				elif evTeam == hAbbrev:
+				elif evTeam == aAbbrev:
 					outTeams["away"][teamStrengthSits[aAbbrev]][teamScoreSits[aAbbrev]]["penTaken"] += 1
 					outTeams["home"][teamStrengthSits[hAbbrev]][teamScoreSits[hAbbrev]]["penDrawn"] += 1
 			elif ev["type"] == "faceoff":
