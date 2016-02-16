@@ -529,23 +529,24 @@ for gameId in gameIds:
 			elif hGCountPerSec[sec] == 0:
 				strSitSecs["ownGPulled"]["home"].add(sec)
 				strSitSecs["oppGPulled"]["away"].add(sec)
-			elif aSCountPerSec[sec] > hSCountPerSec[sec] and aSCountPerSec[sec] >= 4 and hSCountPerSec[sec] >= 3:
-				# Cases with away PP and home SH (5v4, 5v3, 4v3)
+			elif aSCountPerSec[sec] > hSCountPerSec[sec] and (aSCountPerSec[sec] == 5 or aSCountPerSec[sec] == 4) and hSCountPerSec[sec] >= 3:
+				# Cases with away PP and home SH (5v4, 5v3, 4v3) - away team can't have more than 5 skaters without the goalie being pulled
 				aKey = "pp" + str(aSCountPerSec[sec]) + str(hSCountPerSec[sec])
 				hKey = "sh" + str(hSCountPerSec[sec]) + str(aSCountPerSec[sec])
 				strSitSecs[aKey]["away"].add(sec)
 				strSitSecs[hKey]["home"].add(sec)
-			elif aSCountPerSec[sec] < hSCountPerSec[sec] and aSCountPerSec[sec] >= 3 and hSCountPerSec[sec] >= 4:
-				# Cases with home PP and away SH (5v4, 5v3, 4v3)
+			elif aSCountPerSec[sec] < hSCountPerSec[sec] and aSCountPerSec[sec] >= 3 and (hSCountPerSec[sec] == 5 or hSCountPerSec[sec] == 4):
+				# Cases with home PP and away SH (5v4, 5v3, 4v3) - home team can't have more than 5 skaters without the goalie being pulled
 				aKey = "sh" + str(aSCountPerSec[sec]) + str(hSCountPerSec[sec])
 				hKey = "pp" + str(hSCountPerSec[sec]) + str(aSCountPerSec[sec])
 				strSitSecs[aKey]["away"].add(sec)
 				strSitSecs[hKey]["home"].add(sec)
-			elif aSCountPerSec[sec] == hSCountPerSec[sec] and aSCountPerSec[sec]:
+			elif aSCountPerSec[sec] == hSCountPerSec[sec] and aSCountPerSec[sec] >= 3 and aSCountPerSec[sec] <= 5:
 				key = "ev" + str(aSCountPerSec[sec])
 				strSitSecs[key]["away"].add(sec)
 				strSitSecs[key]["home"].add(sec)
 			else:
+				# "other" includes cases where a team played with too many players (goalie + 6 skaters)
 				key = "other"
 				strSitSecs[key]["away"].add(sec)
 				strSitSecs[key]["home"].add(sec)
