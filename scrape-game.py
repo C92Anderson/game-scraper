@@ -305,12 +305,16 @@ for gameId in gameIds:
 					newDict["hZone"] = "d"
 
 		# Record players and their roles
-		# Some additional processing required:
+		# Some corrections are required:
 		# 	For goals, the json simply lists "assist" for both assisters - enhance this to "assist1" and "assist2"
 		#	For giveaways and takeaways, the json uses role "PlayerID" - convert this to "giver" and "taker"
 		#	For "puck over glass" penalties, there seems to be a bug:
 		#		The json description in 2015020741 is: Braden Holtby Delaying Game - Puck over glass served by Alex Ovechkin
+		#		Holtby is given the playerType: "PenaltyOn", which is OK
 		#		However, Ovechkin is given the playerType: "DrewBy" -- we're going to correct this by giving him type "ServedBy"
+		#	For "too many men" penalties, there seems to be a bug:
+		#		The json description in 2015020741 is: Too many men/ice served by Sam Gagner
+		#		However, Gagner is the only player and is given the playerType: "PenaltyOn" -- we're going to correct this by giving him type "ServedBy"
 
 		jRoles = dict()
 		for jP in jEv["players"]:
@@ -335,6 +339,10 @@ for gameId in gameIds:
 				if "servedby" not in jRoles and "drewby" in jRoles:
 					jRoles["servedby"] = jRoles["drewby"]
 					del jRoles["drewby"]
+			elif newDict["subtype"].lower().find("too many men") >= 0:
+				if "servedby" not in jRoles and "penaltyon" in jRoles:
+					jRoles["servedby"] = jRoles["penaltyon"]
+					del jRoles["penaltyon"]
 
 		# If there's no roles - we don't want to create a 'roles' key in the event's output dictionary
 		if len(jRoles) > 0:
