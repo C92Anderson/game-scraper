@@ -49,7 +49,8 @@ outGames = []
 for date in dates:
 	for game in date["games"]:
 		gameDict = dict()
-		gameDict["gameId"] = game["gamePk"]
+		gameDict["season"] = game["season"]
+		gameDict["gameId"] = str(game["gamePk"])[5:]
 		gameDict["state"] = game["status"]["detailedState"]
 		outGames.append(gameDict)
 
@@ -63,7 +64,7 @@ outGames = sorted(outGames, key=itemgetter("gameId"))
 
 print " "
 print requestStr
-print "SEASON  GAMEID" 
+print "SEASON      GAMEID   STATE" 
 for game in outGames:
-	print str(game["gameId"])[0:4] + "    " + str(game["gameId"])[5:] + "    " + game["state"] 
+	print str(game["season"]) + "    " + str(game["gameId"]) + "    " + game["state"] 
 print " "
