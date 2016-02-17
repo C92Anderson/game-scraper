@@ -709,6 +709,15 @@ for gameId in gameIds:
 			if ev["type"] == "faceoff":
 				adjAOnIce = aOnIce - aOnIceEnding
 				adjHOnIce = hOnIce - hOnIceEnding
+
+				# In some cases, like for a faceoff following an icing (eventIdx 136 in 2015020020)
+				# The skaters who couldn't change have their shifts ending at the faceoff time
+				# However, they also have shifts starting at the faceoff time
+				# In this case, aOnIce - aOnIceEnding will remove all skaters
+				if len(aOnIceEnding) > 0 and aOnIceEnding == aOnIceStarting:
+					adjAOnIce = aOnIce
+				if len(hOnIceEnding) > 0 and hOnIceEnding == hOnIceStarting:
+					adjHOnIce = hOnIce
 			else:
 				adjAOnIce = aOnIce - aOnIceStarting
 				adjHOnIce = hOnIce - hOnIceStarting
@@ -831,6 +840,9 @@ for gameId in gameIds:
 			#
 			
 			teamStrengthSits = dict()	# Returns the strength situation from the key-team's perspective
+
+			if "aSkaterCount" not in ev:
+				pprint(ev)
 
 			if "aG" not in ev:
 				teamStrengthSits[aAbbrev] = "ownGPulled"
