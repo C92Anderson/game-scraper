@@ -686,6 +686,21 @@ for gameId in gameIds:
 							aOnIceStarting.add(pId)
 						elif nestedShifts[pId]["iceSit"] == "home":
 							hOnIceStarting.add(pId)
+			
+			# In some cases, like eventIdx 136 in 2015020020; eventIdx 209 in 2015020028
+			# Some players end a shift at time t, but also start a shift at time t
+			# Remove these players from the onIceStarting and onIceEnding sets so that the sets don't overlap
+			# Overlapping sets will cause the next step, where we get the differences between sets, to fail
+
+			aOnIceEndingCopy = copy.deepcopy(aOnIceEnding)
+			hOnIceEndingCopy = copy.deepcopy(hOnIceEnding)
+			aOnIceStartingCopy = copy.deepcopy(aOnIceStarting)
+			hOnIceStartingCopy = copy.deepcopy(hOnIceStarting)
+
+			aOnIceEnding.difference_update(aOnIceStartingCopy)
+			aOnIceStarting.difference_update(aOnIceEndingCopy)
+			hOnIceEnding.difference_update(hOnIceStartingCopy)
+			hOnIceStarting.difference_update(hOnIceEndingCopy)
 
 			#
 			# Record the on-ice players
@@ -709,15 +724,6 @@ for gameId in gameIds:
 			if ev["type"] == "faceoff":
 				adjAOnIce = aOnIce - aOnIceEnding
 				adjHOnIce = hOnIce - hOnIceEnding
-
-				# In some cases, like for a faceoff following an icing (eventIdx 136 in 2015020020)
-				# The skaters who couldn't change have their shifts ending at the faceoff time
-				# However, they also have shifts starting at the faceoff time
-				# In this case, aOnIce - aOnIceEnding will remove all skaters
-				if len(aOnIceEnding) > 0 and aOnIceEnding == aOnIceStarting:
-					adjAOnIce = aOnIce
-				if len(hOnIceEnding) > 0 and hOnIceEnding == hOnIceStarting:
-					adjHOnIce = hOnIce
 			else:
 				adjAOnIce = aOnIce - aOnIceStarting
 				adjHOnIce = hOnIce - hOnIceStarting
@@ -840,9 +846,6 @@ for gameId in gameIds:
 			#
 			
 			teamStrengthSits = dict()	# Returns the strength situation from the key-team's perspective
-
-			if "aSkaterCount" not in ev:
-				pprint(ev)
 
 			if "aG" not in ev:
 				teamStrengthSits[aAbbrev] = "ownGPulled"
