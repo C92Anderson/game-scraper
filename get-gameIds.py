@@ -2,6 +2,7 @@ import sys
 import urllib2
 import json
 from pprint import pprint
+from operator import itemgetter
 
 #
 # 
@@ -44,12 +45,15 @@ dates = jsonDict["dates"]
 #
 #
 
-gameIds = []
+outGames = []
 for date in dates:
 	for game in date["games"]:
-		gameIds.append(game["gamePk"])
+		gameDict = dict()
+		gameDict["gameId"] = game["gamePk"]
+		gameDict["state"] = game["status"]["detailedState"]
+		outGames.append(gameDict)
 
-gameIds.sort()
+outGames = sorted(outGames, key=itemgetter("gameId"))
 
 #
 #
@@ -60,6 +64,6 @@ gameIds.sort()
 print " "
 print requestStr
 print "SEASON  GAMEID" 
-for gameId in gameIds:
-	print str(gameId)[0:4] + "    " + str(gameId)[5:]
+for game in outGames:
+	print str(game["gameId"])[0:4] + "    " + str(game["gameId"])[5:] + "    " + game["state"] 
 print " "
