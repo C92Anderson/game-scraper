@@ -853,11 +853,11 @@ for gameId in gameIds:
 			elif "hG" not in ev:
 				teamStrengthSits[aAbbrev] = "oppGPulled"
 				teamStrengthSits[hAbbrev] = "ownGPulled"
-			elif ev["aSkaterCount"] > ev["hSkaterCount"] and ev["aSkaterCount"] >= 4 and ev["hSkaterCount"] >= 3:
+			elif ev["aSkaterCount"] > ev["hSkaterCount"] and (ev["aSkaterCount"] == 5 or ev["aSkaterCount"] == 4) and ev["hSkaterCount"] >= 3:
 				# Cases with away PP and home SH (5v4, 5v3, 4v3)
 				teamStrengthSits[aAbbrev] = "pp" + str(ev["aSkaterCount"]) + str(ev["hSkaterCount"])
 				teamStrengthSits[hAbbrev] = "sh" + str(ev["hSkaterCount"]) + str(ev["aSkaterCount"])
-			elif ev["aSkaterCount"] < ev["hSkaterCount"] and ev["aSkaterCount"] >= 3 and ev["hSkaterCount"] >= 4:
+			elif ev["aSkaterCount"] < ev["hSkaterCount"] and ev["aSkaterCount"] >= 3 and (ev["hSkaterCount"] == 5 or ev["hSkaterCount"] == 4):
 				# Cases with home PP and away SH (5v4, 5v3, 4v3)
 				teamStrengthSits[aAbbrev] = "sh" + str(ev["aSkaterCount"]) + str(ev["hSkaterCount"])
 				teamStrengthSits[hAbbrev] = "pp" + str(ev["hSkaterCount"]) + str(ev["aSkaterCount"])
@@ -866,6 +866,7 @@ for gameId in gameIds:
 				teamStrengthSits[hAbbrev] = "ev" + str(ev["hSkaterCount"])
 			else:
 				# "other" includes penalty shots, where a single goalie and skater are on the ice
+				# Also includes cases where there's too many skaters on the ice (a goalie + more than 5 skaters)
 				teamStrengthSits[aAbbrev] = "other"
 				teamStrengthSits[hAbbrev] = "other"
 
