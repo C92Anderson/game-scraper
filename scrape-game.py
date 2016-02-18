@@ -434,6 +434,11 @@ for gameId in gameIds:
 		# For regular season, period 5 is unreliable:
 		#	2015020759 went to SO, but only a single player has a shift with period 5, and the start and end times are 0:00 - this was the only SO goal
 		pId = s["playerId"]
+
+		# Skip this shift and player if the player doesn't exist in outPlayers, which was created from the json pbp's players list
+		if pId not in outPlayers:
+			continue
+
 		period = s["period"]	
 		start = toSecs(s["startTime"])
 		end = toSecs(s["endTime"])
@@ -1067,6 +1072,11 @@ for gameId in gameIds:
 	outFile.write(outString)
 
 	for sh in shifts:
+
+		# Skip this shift and player if the player doesn't exist in outPlayers, which was created from the json pbp's players list
+		if sh["playerId"] not in outPlayers:
+			continue
+
 		outString = str(seasonArg)
 		outString += "," + str(gameDate)
 		outString += "," + str(gameId)
