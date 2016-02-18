@@ -252,7 +252,6 @@ for gameId in gameIds:
 
 		# Create a dictionary for this event
 		newDict["id"] = jEv["about"]["eventIdx"]
-		newDict["order"] = i
 
 		newDict["period"] = jEv["about"]["period"]
 		newDict["periodType"] = jEv["about"]["periodType"].lower()
