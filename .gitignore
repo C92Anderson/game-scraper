@@ -6,4 +6,4 @@ dbconfig.py
 
 /nhl-data/*
 /data-for-db/*
-/fallback-nhl-data/*
+/fallback-data/*

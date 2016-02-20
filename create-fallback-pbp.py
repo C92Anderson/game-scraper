@@ -6,6 +6,20 @@ import re
 import json
 import copy
 
+#
+#
+# INSTRUCTIONS
+#
+# 1. Manually download the nhl html pbp
+#		- Save it as: PL-20152016-20194.HTM
+# 2. Manually retrieve the snet json
+#		- Copy the value for the 'bootstrap' variable in the 3rd script element: http://www.sportsnet.ca/hockey/nhl/livetracker/game/1553527
+#		- Save it as: SN-20152016-20194.json
+# 3. Manually specify home and away team abbreviations: teamAbbrevs
+# 4. Manually map player jersey numbers to playerIds
+#
+#
+
 season = int(sys.argv[1])	# Specify 20142015 for the 2014-2015 season
 gameId = int(sys.argv[2])	# Specify a single gameId 20194
 
@@ -14,43 +28,6 @@ def toSecs(timeStr):
 	mm = int(timeStr[0:timeStr.find(":")])
 	ss = int(timeStr[timeStr.find(":")+1:])
 	return 60 * mm + ss
-
-# Update the html team abbreviations to the ones used in the json pbp
-# N.J (html) -> NJD (json); S.J -> SJS; T.B -> TBL; L.A -> LAK
-def useNewTeamAbbrev(abbrev):
-	if abbrev == "n.j":
-		return "njd"
-	elif abbrev == "s.j":
-		return "sjs"
-	elif abbrev == "t.b":
-		return "tbl"
-	elif abbrev == "l.a":
-		return "lak"
-	else:
-		return abbrev
-
-# Update the html event types to the ones used in the json pbp
-def useJsonEvTypes(htmlType):
-	if htmlType == "pstr":
-		return "period_start"
-	elif htmlType == "pend":
-		return "period_end"
-	elif htmlType == "gend":
-		return "game_end"
-	elif htmlType == "fac":
-		return "faceoff"
-	elif htmlType == "miss":
-		return "missed_shot"
-	elif htmlType == "block":
-		return "blocked_shot"
-	elif htmlType == "give":
-		return "giveaway"
-	elif htmlType == "take":
-		return "takeaway"
-	elif htmlType == "penl":
-		return "penalty"
-	else:
-		return htmlType
 
 #
 #
@@ -121,7 +98,7 @@ if season == 20152016 and gameId == 20194:
 #
 #
 
-inDir = "fallback-nhl-data/"
+inDir = "fallback-data/raw/"
 inFilename = "PL-" + str(season) + "-" + str(gameId) + ".HTM"
 htmlInFile = file(inDir + inFilename, "r")
 soup = BeautifulSoup(htmlInFile.read(), "lxml")
@@ -148,7 +125,26 @@ for r in rows:
 	# Get event type and convert it to the those used in the json pbp
 	# We won't worry about getting the subtypes
 	pDict["type"] = r.find_all("td", class_=re.compile("bborder"))[4].text.lower()
-	pDict["type"] = useJsonEvTypes(pDict["type"])
+
+	# Update the html event types to the ones used in the json pbp
+	if pDict["type"] == "pstr":
+		pDict["type"] = "period_start"
+	elif pDict["type"] == "pend":
+		pDict["type"] = "period_end"
+	elif pDict["type"] == "gend":
+		pDict["type"] = "game_end"
+	elif pDict["type"] == "fac":
+		pDict["type"] = "faceoff"
+	elif pDict["type"] == "miss":
+		pDict["type"] = "missed_shot"
+	elif pDict["type"] == "block":
+		pDict["type"] = "blocked_shot"
+	elif pDict["type"] == "give":
+		pDict["type"] = "giveaway"
+	elif pDict["type"] == "take":
+		pDict["type"] = "takeaway"
+	elif pDict["type"] == "penl":
+		pDict["type"] = "penalty"
 
 	# Get event subtype
 	if pDict["type"] in ["goal", "missed_shot", "blocked_shot", "shot"]:
@@ -205,8 +201,17 @@ for r in rows:
 	pDict["time"] = toSecs(timeElapsed)
 
 	# Get the team that TOOK the shot, MADE the hit, COMMITTED the penalty, WON the faceoff, etc.
+	# Update the html team abbreviations to the ones used in the nhl json pbp
 	evTeam = evDesc[0:evDesc.find(" ")].lower()
-	evTeam = useNewTeamAbbrev(evTeam)
+	if evTeam == "n.j":
+		evTeam = "njd"
+	elif evTeam == "s.j":
+		evTeam = "sjs"
+	elif evTeam == "t.b":
+		evTeam = "tbl"
+	elif evTeam == "l.a":
+		evTeam = "lak"
+
 	if evTeam in [teamAbbrevs["away"], teamAbbrevs["home"]]:
 		pDict["team"] = evTeam
 
@@ -222,7 +227,7 @@ for r in rows:
 	# Parse the event description to produce the same roles found in the json
 	#
 
-	roles = []
+	rolesDict = dict()
 
 	if pDict["type"] == "faceoff":
 		aTaker = evDesc.split("#")[1]				# The away FO taker is always listed first
@@ -231,17 +236,17 @@ for r in rows:
 		hTaker = hTaker[0:hTaker.find(" ")]
 
 		if pDict["team"] == teamAbbrevs["away"]:
-			roles.append(["winner", teamAbbrevs["away"] + "-" + aTaker])
-			roles.append(["loser", teamAbbrevs["home"] + "-"+ hTaker])
+			rolesDict["winner"] = teamAbbrevs["away"] + "-" + aTaker
+			rolesDict["loser"] = teamAbbrevs["home"] + "-" + hTaker
 		elif pDict["team"] == teamAbbrevs["home"]:
-			roles.append(["winner", teamAbbrevs["home"] + "-" + hTaker])
-			roles.append(["loser", teamAbbrevs["away"] + "-"+ aTaker])
+			rolesDict["winner"] = teamAbbrevs["home"] + "-" + hTaker
+			rolesDict["loser"] = teamAbbrevs["away"] + "-" + aTaker
 
 	elif pDict["type"] in ["shot", "missed_shot"]:
 		
 		shooter = evDesc.split("#")[1]				# Only a single player is listed for shots-on-goal and misses
 		shooter = shooter[0:shooter.find(" ")]
-		roles.append(["shooter", pDict["team"] + "-" + shooter])
+		rolesDict["shooter"] = pDict["team"] + "-" + shooter
 
 	elif pDict["type"] == "blocked_shot":
 		
@@ -250,11 +255,11 @@ for r in rows:
 		blocker = evDesc.split("#")[2]				# The blocker is always listed first
 		blocker = blocker[0:blocker.find(" ")]
 
-		roles.append(["shooter", pDict["team"] + "-" + shooter])
+		rolesDict["shooter"] = pDict["team"] + "-" + shooter
 		if pDict["team"] == teamAbbrevs["away"]:
-			roles.append(["blocker", teamAbbrevs["home"] + "-" + blocker])
+			rolesDict["blocker"] = teamAbbrevs["home"] + "-" + blocker
 		elif pDict["team"] == teamAbbrevs["home"]:
-			roles.append(["blocker", teamAbbrevs["away"] + "-" + blocker])
+			rolesDict["blocker"] = teamAbbrevs["away"] + "-" + blocker
 
 	elif pDict["type"] in ["giveaway", "takeaway"]:
 
@@ -263,9 +268,9 @@ for r in rows:
 		player = pDict["team"] + "-" + player
 
 		if pDict["type"] == "give":
-			roles.append(["giver", player])
+			rolesDict["giver"] = player
 		elif pDict["type"] == "take":
-			roles.append(["taker", player])
+			rolesDict["taker"] = player
 
 	elif pDict["type"] == "goal":
 
@@ -273,15 +278,15 @@ for r in rows:
 		if numPlayers >= 1:
 			scorer = evDesc.split("#")[1]		# Scorer is always listed first
 			scorer = scorer[0:scorer.find(" ")]
-			roles.append(["scorer", pDict["team"] + "-" + scorer])
+			rolesDict["scorer"] = pDict["team"] + "-" + scorer
 		if numPlayers >= 2:
 			a1 = evDesc.split("#")[2]			# Primary assister is always listed second
 			a1 = a1[0:a1.find(" ")]
-			roles.append(["assist1", pDict["team"] + "-" + a1])
+			rolesDict["assist1"] = pDict["team"] + "-" + a1
 		if numPlayers >= 3:
 			a2 = evDesc.split("#")[3]			# Secondary assister is always listed second
 			a2 = a2[0:a2.find(" ")]
-			roles.append(["assist2", pDict["team"] + "-" + a2])
+			rolesDict["assist2"] = pDict["team"] + "-" + a2
 
 	elif pDict["type"] == "hit":
 
@@ -290,11 +295,11 @@ for r in rows:
 		hittee = evDesc.split("#")[2]
 		hittee = hittee[0:hittee.find(" ")]
 
-		roles.append(["hitter", pDict["team"] + "-" + hitter])
+		rolesDict["hitter"] = pDict["team"] + "-" + hitter
 		if pDict["team"] == teamAbbrevs["away"]:
-			roles.append(["hittee", teamAbbrevs["home"] + "-" + hittee])
+			rolesDict["hittee"] = teamAbbrevs["home"] + "-" + hittee
 		elif pDict["team"] == teamAbbrevs["home"]:
-			roles.append(["hittee", teamAbbrevs["away"] + "-" + hittee])
+			rolesDict["hittee"] = teamAbbrevs["away"] + "-" + hittee
 
 	elif pDict["type"] == "penalty":
 
@@ -305,7 +310,7 @@ for r in rows:
 		poundIdx = penaltyOn.find("#")
 		if poundIdx >= 0:
 			penaltyOn = penaltyOn[poundIdx+1:]
-			roles.append(["penaltyon", pDict["team"] + "-" + penaltyOn])
+			rolesDict["penaltyon"] = pDict["team"] + "-" + penaltyOn
 
 		# Get the player who drew the penalty
 		drawnBy = None
@@ -318,9 +323,9 @@ for r in rows:
 			drawnBy = drawnBy[0:drawnBy.find(" ")]		# Isolate the jersey number
 
 			if pDict["team"] == teamAbbrevs["away"]:	# The penalty-drawer is always on the opposite team of the penalty-taker
-				roles.append(["drewby", teamAbbrevs["home"] + "-" + drawnBy])
+				rolesDict["drewby"] = teamAbbrevs["home"] + "-" + drawnBy
 			elif pDict["team"] == teamAbbrevs["home"]:
-				roles.append(["drewby", teamAbbrevs["away"] + "-" + drawnBy])
+				rolesDict["drewby"] = teamAbbrevs["away"] + "-" + drawnBy
 
 		# Get the player who served the penalty
 		servedBy = None
@@ -330,16 +335,16 @@ for r in rows:
 			servedBy = evDesc[evDesc.find(pattern):]	# Returns a substring *starting* with the pattern
 			servedBy = servedBy[len(pattern):]			# Remove the pattern from the substring
 			servedBy = servedBy[0:servedBy.find(" ")]	# Isolate the jersey number
-			roles.append(["servedBy", pDict["team"] + "-" + servedBy])
+			rolesDict["servedby"] = pDict["team"] + "-" + servedBy
 
 	#
 	# Convert jersey numbers into playerIds and store the dict
 	#
 
-	if len(roles) > 0:
-		for role in roles:
-			role[1] = playerIds[role[1]]
-		pDict["roles"] = roles
+	if len(rolesDict) > 0:
+		for role in rolesDict:
+			rolesDict[role] = playerIds[rolesDict[role]]
+		pDict["roles"] = copy.deepcopy(rolesDict)
 
 	#
 	# Get the zone in which the event occurred - always use the home team's perspective
@@ -368,6 +373,9 @@ for r in rows:
 				pDict["hZone"] = "d"
 			elif evDesc.lower().find("neu. zone") >= 0:
 				pDict["hZone"] = "n"
+
+	# Create a flag to prevent the event from being matched to multiple snet json events
+	pDict["matched"] = False
 
 	outEvents.append(copy.deepcopy(pDict))
 
@@ -404,11 +412,176 @@ for ev in outEvents:
 
 #
 #
+# Load the snet file to get locations for: goals, shots, misses, blocks, penalties, hits
+# Other event types aren't included in the snet data
+#
+#
+
+#
+# Get the list of play and team objects from the snet json
+#
+
+inFilename = "SN-" + str(season) + "-" + str(gameId) + ".json"
+jsonInFile = file(inDir + inFilename, "r")
+jsonDict = json.loads(jsonInFile.read())
+jsonInFile.close()
+
+snetEvs = dict()
+snetTeams = dict()
+
+for key, value in jsonDict.items():
+	if key == "plays":
+		snetEvs = value
+	elif key == "teams":
+		snetTeams = value
+del jsonDict
+
+#
+# Map snet teamIds to team abbreviations
+#
+
+snetTeamAbbrevs = dict()
+for team in snetTeams:
+	snetTeamAbbrevs[team["id"]] = team["abbr"].lower()
+del snetTeams
+
+#
+# Update snet events to use the same values as the html so that we can match events from snet and nhl pbps
+#
+
+for ev in snetEvs:
+
+	#
+	# Translate event types
+	#
+
+	if ev["event"] == "score":
+		ev["event"] = "goal"
+	elif ev["event"] == "shot-on-goal":
+		ev["event"] = "shot"
+	elif ev["event"] == "shot-missed":
+		ev["event"] = "missed_shot"
+	elif ev["event"] == "shot-blocked":
+		ev["event"] = "blocked_shot"
+
+	#
+	# Translate roles
+	#
+
+	if "participants" in ev:
+
+		if ev["event"] == "goal":
+			assistCount = 0
+			for party in ev["participants"]:
+				if party["role"] == "assist":
+					assistCount += 1
+					party["role"] = "assist" + str(assistCount)
+				elif party["role"] == "goaltender":
+					party["role"] = "goalie"
+		elif ev["event"] == "shot":
+			for party in ev["participants"]:
+				if party["role"] == "goaltender":
+					party["role"] = "goalie"
+		elif ev["event"] == "penalty":
+			for party in ev["participants"]:
+				if party["role"] == "penalty-committed-by":
+					party["role"] = "penaltyon"
+				elif party["role"] == "penalty-committed-against":
+					party["role"] = "drewby"
+				elif party["role"] == "penalty-served-by":
+					party["role"] = "servedby"
+
+	#
+	# Convert roles to dictionary so we can compare it to the html events' role dictionary
+	#
+
+	if "participants" in ev:
+		ev["roles"] = dict()		# This matches the nhl's html pbp: goalies aren't listed for any shots or goals
+		ev["fullRoles"] = dict()	# This matches the nhl's json pbp: goalies are only listed for saved shots (not goals)
+
+		for party in ev["participants"]:
+			if party["role"] == "goalie":
+				if ev["type"] == "shot":
+					ev["fullRoles"][party["role"]] = party["playerId"]
+			else:
+				ev["roles"][party["role"]] = party["playerId"]
+				ev["fullRoles"][party["role"]] = party["playerId"]
+
+		del ev["participants"]
+
+	# Convert event time
+	ev["time"] = toSecs(ev["elapsed"])
+
+	# Get team abbreviation
+	# For blocked shots, the snet json attributes the event to the blocker's team - flip this
+	ev["team"] = snetTeamAbbrevs[ev["teamId"]]
+	del ev["teamId"]
+	if ev["event"] == "blocked_shot":
+		if ev["team"] == teamAbbrevs["home"]:
+			ev["team"] = teamAbbrevs["away"]
+		elif ev["team"] == teamAbbrevs["away"]:
+			ev["team"] = teamAbbrevs["home"]
+
+	# Create a flag to prevent the json event from being matched to multiple html events
+	ev["matched"] = False
+
+#
+#
+# Add json event location data to html events
+# Also add the fullRoles from the snet json that contains the goalie on saved shots (to be consistent with the nhl json)
+#
+#
+
+for ev in outEvents:
+
+	if ev["type"] in ["goal", "shot", "missed_shot", "blocked_shot", "penalty", "hit"]:
+
+		for jEv in snetEvs:
+
+			if (ev["matched"] == False and jEv["matched"] == False
+				and ev["period"] == jEv["period"] and ev["time"] == jEv["time"]
+				and ev["team"] == jEv["team"] and ev["roles"] == jEv["roles"]
+				and ev["type"] == jEv["event"]):
+
+				jEv["matched"] = True
+				ev["matched"] = True
+
+				ev["roles"] = jEv["fullRoles"]
+				ev["coords"] = jEv["location"]
+
+#
+# For validation, print any unmatched json events
+#
+
+for jEv in snetEvs:
+	if jEv["matched"] == False:
+		print "Unmatched snet json event:"
+		pprint(jEv)
+
+#
+#
+# Clean up outEvents for output
+#
+#
+
+for ev in outEvents:
+
+	# Delete matched flag
+	del ev["matched"]
+
+	# Split up coordinates
+	if "coords" in ev:
+		ev["locX"] = ev["coords"][0]
+		ev["locY"] = ev["coords"][1]
+		del ev["coords"]
+
+#
+#
 # Output outEvents as json
 #
 #
 
-outDir = inDir + "processed/"
+outDir = "fallback-data/processed/"
 outFilename = outDir + "PL-" + str(season) + "-" + str(gameId) + "-processed.json"	
 outFile = open(outFilename, "w")
 outFile.write(json.dumps(outEvents).encode("utf-8"))
