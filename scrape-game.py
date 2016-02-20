@@ -396,6 +396,7 @@ for gameId in gameIds:
 	#
 
 	del events
+	pprint(outEvents)
 
 	#
 	#
@@ -713,7 +714,6 @@ for gameId in gameIds:
 			# Case 2: Non face-off events
 			#	Attribute all other events to players who in the middle of their shift (onIce) and players ending their shift (onIceEnding)
 			#	With this approach, we're saying that the players who are ending their shift at time t had more to do with the event at time t than those starting their shift at time t
-			#	This is somewhat inaccurate for penalty shots - the html pbp will only list the shooter and goalie, but since we aren't counting penalty shots as corsis, we won't worry about this
 			# Example 1: Penalty shots will have 3 pbp entries:
 			#	1. The penalty - case 2 handles this
 			#	2. The penalty shot - case 2 handles this
@@ -1302,6 +1302,8 @@ for gameId in gameIds:
 	# Load csv files into database
 	#
 	#
+
+	sys.exit()
 
 	print "- - - - -"
 	print "Loading csv files into database"
