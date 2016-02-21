@@ -430,14 +430,19 @@ snetEvs = dict()
 snetTeams = dict()
 snetPlayers = dict()
 gameDate = None
+numPeriods = None
 
 for key, value in jsonDict.items():
 	if key == "plays":
 		snetEvs = value
 	elif key == "players":
 		snetPlayers = value
-	elif key == "teams":
-		snetTeams = value
+	elif key == "league":
+		# Loop through each game listed in the 'league' object and find the matching game
+		for game in value: 
+			if int(game["id"]) == gameId:
+				snetTeams = game["team"]
+				numPeriods = game["period"]
 	elif key == "game":
 		gameDate = value["startTime"]
 
@@ -448,9 +453,10 @@ del jsonDict
 #
 
 snetTeamAbbrevs = dict()
+snetFinalScores = dict()
 for team in snetTeams:
 	snetTeamAbbrevs[team["id"]] = team["abbr"].lower()
-del snetTeams
+	snetFinalScores[team["alignment"]] = team["score"]
 
 #
 # Update snet events to use the same values as the html so that we can match events from snet and nhl pbps
@@ -661,9 +667,35 @@ outDict["liveData"] = dict()
 outDict["liveData"]["plays"] = dict()
 outDict["liveData"]["plays"]["allPlays"] = outEvents
 
+# Output game results
 # Hardcode the 'time remaining' value since we're working with finished games
 outDict["liveData"]["linescore"] = dict()
 outDict["liveData"]["linescore"]["currentPeriodTimeRemaining"] = "final"
+outDict["liveData"]["linescore"]["currentPeriod"] = numPeriods
+
+
+lastPeriodName = "unknown"
+if numPeriods == 1:
+	lastPeriodName = "1st"
+elif numPeriods == 2:
+	lastPeriodName = "2nd"
+elif numPeriods == 3:
+	lastPeriodName = "3rd"
+elif gameId < 30000:	# Regular season overtime and shootout
+	if numPeriods == 4:
+		lastPeriodName = "ot"
+	elif numPeriods == 5:
+		lastPeriodName = "so"
+elif gameId >= 30000:	# Playoff overtimes
+	lastOtPeriod = numPeriods - 3
+	lastPeriodName = "ot" + st(lastOtPeriod)
+outDict["liveData"]["linescore"]["currentPeriodOrdinal"] = lastPeriodName
+
+outDict["liveData"]["linescore"]["teams"] = dict()
+outDict["liveData"]["linescore"]["teams"]["away"] = dict()
+outDict["liveData"]["linescore"]["teams"]["home"] = dict()
+outDict["liveData"]["linescore"]["teams"]["away"]["goals"] = snetFinalScores["away"]
+outDict["liveData"]["linescore"]["teams"]["home"]["goals"] = snetFinalScores["home"]
 
 # Write output to file
 outDir = "fallback-data/processed/"

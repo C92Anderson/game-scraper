@@ -1336,8 +1336,6 @@ for gameId in gameIds:
 	#
 	#
 
-	sys.exit()
-
 	print "- - - - -"
 	print "Loading csv files into database"
 
