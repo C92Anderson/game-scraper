@@ -15,8 +15,8 @@ import copy
 # 2. Manually retrieve the snet json
 #		- Copy the value for the 'bootstrap' variable in the 3rd script element: http://www.sportsnet.ca/hockey/nhl/livetracker/game/1553527
 #		- Save it as: SN-20152016-20194.json
-# 3. Manually specify home and away team abbreviations: teamAbbrevs
-# 4. Manually map player jersey numbers to playerIds
+# 3. Manually specify home and away team abbreviations using the 'teamAbbrevs' dict
+# 4. Manually map player jersey numbers to playerIds using the 'playerIds' dict
 #
 #
 
@@ -40,6 +40,9 @@ teamAbbrevs = dict()
 if season == 20152016 and gameId == 20194:
 	teamAbbrevs["away"] = "det"
 	teamAbbrevs["home"] = "tor"
+elif season == 20152016 and gameId == 20432:
+	teamAbbrevs["away"] = "nyr"
+	teamAbbrevs["home"] = "edm"
 
 #
 #
@@ -91,6 +94,47 @@ if season == 20152016 and gameId == 20194:
 	playerIds["det-71"] = 8477946 # Larkin
 	playerIds["det-34"] = 8475852 # Mrazek
 	# playerIds["det-35"] = Howard - no entry in shift json
+if season == 20152016 and gameId == 20432:
+	playerIds["nyr-5"] = 8471958 # Girardi
+	playerIds["nyr-6"] = 8475795 # McIlrath
+	playerIds["nyr-10"] = 8476468 # Miller
+	playerIds["nyr-13"] = 8475763 # Hayes
+	playerIds["nyr-15"] = 8470854 # Glass
+	playerIds["nyr-16"] = 8473544 # Brassard
+	playerIds["nyr-18"] = 8471686 # Staal
+	playerIds["nyr-19"] = 8475855 # Fast
+	playerIds["nyr-20"] = 8475184 # Kreider
+	playerIds["nyr-22"] = 8467096 # Boyle
+	playerIds["nyr-24"] = 8475715 # Lindberg
+	playerIds["nyr-26"] = 8468526 # Stoll
+	playerIds["nyr-27"] = 8474151 # McDonagh
+	playerIds["nyr-28"] = 8468575 # Moore
+	playerIds["nyr-36"] = 8475692 # Zuccarello
+	playerIds["nyr-61"] = 8470041 # Nash
+	playerIds["nyr-93"] = 8471735 # Yandle
+	playerIds["nyr-96"] = 8475770 # Etem
+	playerIds["nyr-30"] = 8468685 # Lundqvist
+	playerIds["nyr-32"] = 8477293 # Raanta
+	playerIds["edm-2"] = 8471284 # Sekera
+	playerIds["edm-4"] = 8475791 # Hall
+	playerIds["edm-14"] = 8474586 # Eberle
+	playerIds["edm-16"] = 8473962 # Purcell
+	playerIds["edm-19"] = 8474602 # Schultz
+	playerIds["edm-20"] = 8473989 # Gazdic
+	playerIds["edm-23"] = 8468611 # Hendricks
+	playerIds["edm-25"] = 8477498 # Nurse
+	playerIds["edm-26"] = 8476336 # Pakarinen
+	playerIds["edm-28"] = 8471232 # Korpikoski
+	playerIds["edm-29"] = 8477934 # Draisaitl
+	playerIds["edm-51"] = 8475165 # Lander
+	playerIds["edm-54"] = 8476915 # Khaira
+	playerIds["edm-55"] = 8473914 # Letestu
+	playerIds["edm-62"] = 8473468 # Gryba
+	playerIds["edm-77"] = 8476472 # Klefbom
+	playerIds["edm-88"] = 8475869 # Davidson
+	playerIds["edm-93"] = 8476454 # Nugent-Hopkins
+	# playerIds["edm-33"] = Talbot - no entry in shift json
+	playerIds["edm-39"] = 8475195 # Nilsson
 
 #
 #
@@ -513,12 +557,13 @@ for ev in snetEvs:
 		ev["fullRoles"] = dict()	# This matches the nhl's json pbp: goalies are only listed for saved shots (not goals)
 
 		for party in ev["participants"]:
-			if party["role"] == "goalie":
-				if ev["type"] == "shot":
+			if party["playerId"] is not None:	# Some roles in the json have playerId: None - skip these
+				if party["role"] == "goalie":
+					if ev["type"] == "shot":
+						ev["fullRoles"][party["role"]] = party["playerId"]
+				else:
+					ev["roles"][party["role"]] = party["playerId"]
 					ev["fullRoles"][party["role"]] = party["playerId"]
-			else:
-				ev["roles"][party["role"]] = party["playerId"]
-				ev["fullRoles"][party["role"]] = party["playerId"]
 
 		del ev["participants"]
 
