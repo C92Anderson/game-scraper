@@ -43,6 +43,9 @@ if season == 20152016 and gameId == 20194:
 elif season == 20152016 and gameId == 20432:
 	teamAbbrevs["away"] = "nyr"
 	teamAbbrevs["home"] = "edm"
+elif season == 20152016 and gameId == 20823:
+	teamAbbrevs["away"] = "stl"
+	teamAbbrevs["home"] = "fla"
 
 #
 #
@@ -94,7 +97,7 @@ if season == 20152016 and gameId == 20194:
 	playerIds["det-71"] = 8477946 # Larkin
 	playerIds["det-34"] = 8475852 # Mrazek
 	# playerIds["det-35"] = Howard - no entry in shift json
-if season == 20152016 and gameId == 20432:
+elif season == 20152016 and gameId == 20432:
 	playerIds["nyr-5"] = 8471958 # Girardi
 	playerIds["nyr-6"] = 8475795 # McIlrath
 	playerIds["nyr-10"] = 8476468 # Miller
@@ -135,6 +138,47 @@ if season == 20152016 and gameId == 20432:
 	playerIds["edm-93"] = 8476454 # Nugent-Hopkins
 	# playerIds["edm-33"] = Talbot - no entry in shift json
 	playerIds["edm-39"] = 8475195 # Nilsson
+elif season == 20152016 and gameId == 20823:
+	playerIds["stl-4"] = 8474125 # Gunnarsson
+	playerIds["stl-6"] = 8476441 # Edmundson
+	playerIds["stl-10"] = 8470105 # Upshall
+	playerIds["stl-12"] = 8474627 # Lehtera
+	playerIds["stl-15"] = 8477952 # Fabbri
+	playerIds["stl-17"] = 8475768 # Schwartz
+	playerIds["stl-19"] = 8470151 # Bouwmeester
+	playerIds["stl-20"] = 8470257 # Steen
+	playerIds["stl-21"] = 8473534 # Berglund
+	playerIds["stl-22"] = 8474031 # Shattenkirk
+	playerIds["stl-26"] = 8471669 # Stastny
+	playerIds["stl-28"] = 8470803 # Brodziak
+	playerIds["stl-36"] = 8471426 # Brouwer
+	playerIds["stl-41"] = 8474145 # Bortuzzo
+	playerIds["stl-42"] = 8470655 # Backes
+	playerIds["stl-55"] = 8476892 # Parayko
+	playerIds["stl-75"] = 8471817 # Reaves
+	playerIds["stl-91"] = 8475765 # Tarasenko
+	playerIds["stl-1"] = 8470880 # Elliott
+	# playerIds["stl-30"] = Copley - no entry in shift json
+	playerIds["fla-3"] = 8474000 # Kampfer
+	playerIds["fla-5"] = 8477932 # Ekblad
+	playerIds["fla-6"] = 8475755 # Petrovic
+	playerIds["fla-7"] = 8475179 # Kulikov
+	playerIds["fla-11"] = 8476456 # Huberdeau
+	playerIds["fla-17"] = 8468001 # MacKenzie
+	playerIds["fla-18"] = 8475191 # Smith
+	playerIds["fla-21"] = 8476389 # Trocheck
+	playerIds["fla-22"] = 8465978 # Thornton
+	playerIds["fla-27"] = 8475760 # Bjugstad
+	playerIds["fla-28"] = 8475253 # Wilson
+	playerIds["fla-36"] = 8469638 # Jokinen
+	playerIds["fla-37"] = 8474698 # Regner
+	playerIds["fla-42"] = 8475769 # Howden
+	playerIds["fla-48"] = 8476400 # Shaw
+	playerIds["fla-51"] = 8466285 # Campbell
+	playerIds["fla-68"] = 8448208 # Jagr
+	playerIds["fla-73"] = 8475204 # Pirri
+	playerIds["fla-1"] = 8466141 # Luongo
+	playerIds["fla-35"] = 8471219 # Montoya
 
 #
 #
