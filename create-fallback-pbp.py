@@ -396,7 +396,7 @@ for ev in outEvents:
 
 		# Look for events that occurred after (or at the same time) as the goal
 		for ev1 in outEvents:
-			if ev1["period"] >= ev["period"] or (ev1["period"] == ev["period"] and ev1["time"] > ev["time"]):
+			if ev1["period"] > ev["period"] or (ev1["period"] == ev["period"] and ev1["time"] > ev["time"]):
 				# For events that occur after the goal, increment the goal counts
 				if ev["iceSit"] == "away":
 					ev1["aScore"] += 1
