@@ -37,7 +37,9 @@ shortSeasonArg =  int(str(seasonArg)[0:4])		# The starting year of the season
 gameArg = str(sys.argv[2])						# Specify a gameId 20100, or a range 20100-20105
 gameIds = []									# List of gameIds to scrape
 
-fallbackGameIds = ["20152016-20194"]			# List of season+gameIds that won't use the json pbp
+# List of season+gameIds that won't use the json pbp
+fallbackGameIds = ["20152016-20194", "20152016-20432"]			
+
 inDir = "nhl-data/"								# Where the input files are stored
 outDir = "data-for-db/"							# Where the output files (to be written to database) are stored
 
