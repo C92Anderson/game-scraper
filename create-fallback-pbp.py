@@ -428,12 +428,19 @@ jsonInFile.close()
 
 snetEvs = dict()
 snetTeams = dict()
+snetPlayers = dict()
+gameDate = None
 
 for key, value in jsonDict.items():
 	if key == "plays":
 		snetEvs = value
+	elif key == "players":
+		snetPlayers = value
 	elif key == "teams":
 		snetTeams = value
+	elif key == "game":
+		gameDate = value["startTime"]
+
 del jsonDict
 
 #
@@ -577,13 +584,91 @@ for ev in outEvents:
 
 #
 #
-# Output outEvents as json
+# Prepare team data for output
 #
 #
 
+outTeams = dict()
+outTeams["away"] = dict()
+outTeams["away"]["abbreviation"] = teamAbbrevs["away"]
+outTeams["home"] = dict()
+outTeams["home"]["abbreviation"] = teamAbbrevs["home"]
+
+#
+#
+# Prepare player data for output
+#
+#
+
+outPlayers = dict()
+
+for player in playerIds:
+
+	# Create a dictionary for each playerId to store player information
+	# To match the nhl json, use "ID#" as the player key
+	pKey = "ID" + str(playerIds[player])
+	outPlayers[pKey] = dict()
+	outPlayers[pKey]["id"] = playerIds[player]
+
+	# Get jersey number
+	outPlayers[pKey]["jersey"] = int(player[player.find("-") + 1:])
+
+	# Get team abbreviation
+	outPlayers[pKey]["team"] = player[0:player.find("-")]
+
+	# Get iceSit
+	if outPlayers[pKey]["team"] == teamAbbrevs["home"]:
+		outPlayers[pKey]["iceSit"] = "home"
+	elif outPlayers[pKey]["team"] == teamAbbrevs["away"]:
+		outPlayers[pKey]["iceSit"] = "away"
+
+#
+# Append additional player information from the snet data
+#
+
+for pKey in outPlayers:
+	for snetPlayer in snetPlayers:
+		if outPlayers[pKey]["id"] == snetPlayer["id"]:
+			outPlayers[pKey]["firstName"] = snetPlayer["firstName"]
+			outPlayers[pKey]["lastName"] = snetPlayer["lastName"]
+			outPlayers[pKey]["primaryPosition"] = dict()
+			outPlayers[pKey]["primaryPosition"]["abbreviation"] = snetPlayer["positionAbbr"].lower()
+			if outPlayers[pKey]["primaryPosition"]["abbreviation"] == "l":
+				outPlayers[pKey]["primaryPosition"]["abbreviation"] = "lw"
+			elif outPlayers[pKey]["primaryPosition"]["abbreviation"] == "r":
+				outPlayers[pKey]["primaryPosition"]["abbreviation"] = "rw"
+
+#
+#
+# Output event, player, and team data as json
+# In most cases, we'll try to replicate the structure of the nhl json
+#
+#
+
+outDict = dict()
+
+# Game date
+outDict["gameData"] = dict()
+outDict["gameData"]["datetime"] = dict()
+outDict["gameData"]["datetime"]["dateTime"] = gameDate
+
+# Team and player data
+outDict["gameData"]["teams"] = outTeams
+outDict["gameData"]["players"] = outPlayers
+
+# Event data
+outDict["liveData"] = dict()
+outDict["liveData"]["plays"] = dict()
+outDict["liveData"]["plays"]["allPlays"] = outEvents
+
+# Hardcode the 'time remaining' value since we're working with finished games
+outDict["liveData"]["linescore"] = dict()
+outDict["liveData"]["linescore"]["currentPeriodTimeRemaining"] = "final"
+
+# Write output to file
 outDir = "fallback-data/processed/"
 outFilename = outDir + "PL-" + str(season) + "-" + str(gameId) + "-processed.json"	
 outFile = open(outFilename, "w")
-outFile.write(json.dumps(outEvents).encode("utf-8"))
+outFile.write(json.dumps(outDict).encode("utf-8"))
 outFile.close()
 		
