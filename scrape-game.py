@@ -371,6 +371,10 @@ for gameId in gameIds:
 					if "servedby" not in jRoles and "penaltyon" in jRoles:
 						jRoles["servedby"] = jRoles["penaltyon"]
 						del jRoles["penaltyon"]
+				elif newDict["subtype"].lower().find("game misconduct - head coach") >= 0:
+					if "servedby" not in jRoles and "penaltyon" in jRoles:
+						jRoles["servedby"] = jRoles["penaltyon"]
+						del jRoles["penaltyon"]
 
 			# If there's no roles - we don't want to create a 'roles' key in the event's output dictionary
 			if len(jRoles) > 0:
