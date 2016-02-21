@@ -37,6 +37,7 @@ shortSeasonArg =  int(str(seasonArg)[0:4])		# The starting year of the season
 gameArg = str(sys.argv[2])						# Specify a gameId 20100, or a range 20100-20105
 gameIds = []									# List of gameIds to scrape
 
+fallbackGameIds = ["20152016-20194"]			# List of season+gameIds that won't use the json pbp
 inDir = "nhl-data/"								# Where the input files are stored
 outDir = "data-for-db/"							# Where the output files (to be written to database) are stored
 
@@ -114,6 +115,12 @@ for gameId in gameIds:
 	print "- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 	print "Processing game " + str(gameId)
 
+	# Determine whether or not to use fallback data
+	useFallback = False
+	if str(seasonArg) + "-" + str(gameId) in fallbackGameIds:
+		useFallback = True
+		print "Using fallback data"
+
 	# Dictionaries to store data from the input json
 	players = dict()
 	teams = dict()
@@ -157,18 +164,27 @@ for gameId in gameIds:
 	#
 	#
 
-	inFile = file(inDir + pbpJson, "r")
-	inString = inFile.read()
+	# If using fallback data, replace the pbp json
+	inFile = None
+	inString = None
+	if useFallback == False:
+		inFile = file(inDir + pbpJson, "r")
+		inString = inFile.read()
+	elif useFallback == True:
+		inFile = file("fallback-data/processed/PL-" + str(seasonArg) + "-" + str(gameId) + "-processed.json", "r")
+		inString = inFile.read()
 	jsonDict = json.loads(inString)
 	inFile.close()
 
 	gameDate = jsonDict["gameData"]["datetime"]["dateTime"]
-	gameDate = int(gameDate[0:10].replace("-", ""))					# Convert from dateTime format to an int (of the date)
-	players = copy.deepcopy(jsonDict["gameData"]["players"])		# Keys: 'ID#' where # is a playerId
-	teams = copy.deepcopy(jsonDict["gameData"]["teams"])			# Keys: 'home', 'away'
+	gameDate = int(gameDate[0:10].replace("-", ""))						# Convert from dateTime format to an int (of the date)
+	players = copy.deepcopy(jsonDict["gameData"]["players"])			# Keys: 'ID#' where # is a playerId
+	teams = copy.deepcopy(jsonDict["gameData"]["teams"])				# Keys: 'home', 'away'
 	events = copy.deepcopy(jsonDict["liveData"]["plays"]["allPlays"])
-	rosters = copy.deepcopy(jsonDict["liveData"]["boxscore"]["teams"])
 	linescore = copy.deepcopy(jsonDict["liveData"]["linescore"])
+	if useFallback == False:
+		rosters = copy.deepcopy(jsonDict["liveData"]["boxscore"]["teams"])	# Not needed when using fallback
+	
 	jsonDict.clear()
 
 	# Reformat the keys in the 'players' dictionary: from 'ID#' to # (as an int), where # is the playerId
@@ -207,10 +223,11 @@ for gameId in gameIds:
 
 	# Remove inactive players from the boxscore's player's list
 	# In the pbp json for 2015020002, both Stoll and Etem have #26, but Etem has no stats and doesn't appear in any events
-	for iceSit in rosters:							# 'iceSit' will be 'home' or 'away'
-		for player in rosters[iceSit]["players"]:	# 'player' will be 'ID#' where # is a playerId
-			if "stats" not in rosters[iceSit]["players"][player] or len(rosters[iceSit]["players"][player]["stats"]) == 0:
-				del players[(int(rosters[iceSit]["players"][player]["person"]["id"]))]	# Remove the inactive player from the 'players' dictionary
+	if useFallback == False:
+		for iceSit in rosters:							# 'iceSit' will be 'home' or 'away'
+			for player in rosters[iceSit]["players"]:	# 'player' will be 'ID#' where # is a playerId
+				if "stats" not in rosters[iceSit]["players"][player] or len(rosters[iceSit]["players"][player]["stats"]) == 0:
+					del players[(int(rosters[iceSit]["players"][player]["person"]["id"]))]	# Remove the inactive player from the 'players' dictionary
 
 	# Prepare the output dictionary outPlayers
 	for pId in players:
@@ -220,12 +237,17 @@ for gameId in gameIds:
 		outPlayers[pId]["lastName"] = players[pId]["lastName"]
 
 		# Get the player's team, iceSit, and jersey number
-		for iceSit in rosters:	# 'iceSit' will be 'home' or 'away'
-			rosterKey = "ID" + str(pId)
-			if rosterKey in rosters[iceSit]["players"]:
-				outPlayers[pId]["team"] = outTeams[iceSit]["abbrev"]
-				outPlayers[pId]["iceSit"] = iceSit
-				outPlayers[pId]["jersey"] = rosters[iceSit]["players"][rosterKey]["jerseyNumber"]
+		if useFallback == False:
+			for iceSit in rosters:	# 'iceSit' will be 'home' or 'away'
+				rosterKey = "ID" + str(pId)
+				if rosterKey in rosters[iceSit]["players"]:
+					outPlayers[pId]["team"] = outTeams[iceSit]["abbrev"]
+					outPlayers[pId]["iceSit"] = iceSit
+					outPlayers[pId]["jersey"] = rosters[iceSit]["players"][rosterKey]["jerseyNumber"]
+		elif useFallback == True:
+			outPlayers[pId]["team"] = players[pId]["team"]
+			outPlayers[pId]["iceSit"] = players[pId]["iceSit"]
+			outPlayers[pId]["jersey"] = players[pId]["jersey"]
 
 		# Initialize stats
 		for strSit in strengthSits:
@@ -246,153 +268,165 @@ for gameId in gameIds:
 	# Create a dictionary to store periodTypes (used when we output the shifts to the shifts csv)
 	periodTypes = dict()
 
-	for i, jEv in enumerate(events):
+	if useFallback == False:	# Process events from the nhl pbp json
 
-		newDict = dict()
+		for jEv in events:
 
-		# Create a dictionary for this event
-		newDict["id"] = jEv["about"]["eventIdx"]
+			newDict = dict()
 
-		newDict["period"] = jEv["about"]["period"]
-		newDict["periodType"] = jEv["about"]["periodType"].lower()
-		newDict["time"] = toSecs(jEv["about"]["periodTime"])
+			# Create a dictionary for this event
+			newDict["id"] = jEv["about"]["eventIdx"]
 
-		newDict["description"] = jEv["result"]["description"]
-		newDict["type"] = jEv["result"]["eventTypeId"].lower()
-		if "secondaryType" in jEv["result"]:
-			newDict["subtype"] = jEv["result"]["secondaryType"].lower()
+			newDict["period"] = jEv["about"]["period"]
+			newDict["periodType"] = jEv["about"]["periodType"].lower()
+			newDict["time"] = toSecs(jEv["about"]["periodTime"])
 
-		# Record penalty-specific information
-		if newDict["type"] == "penalty":
-			newDict["penSeverity"] = jEv["result"]["penaltySeverity"].lower()
-			newDict["penMins"] = jEv["result"]["penaltyMinutes"]	
+			newDict["description"] = jEv["result"]["description"]
+			newDict["type"] = jEv["result"]["eventTypeId"].lower()
+			if "secondaryType" in jEv["result"]:
+				newDict["subtype"] = jEv["result"]["secondaryType"].lower()
 
-		if "coordinates" in jEv and len(jEv["coordinates"]) == 2:
-			newDict["locX"] = jEv["coordinates"]["x"]
-			newDict["locY"] = jEv["coordinates"]["y"]
+			# Record penalty-specific information
+			if newDict["type"] == "penalty":
+				newDict["penSeverity"] = jEv["result"]["penaltySeverity"].lower()
+				newDict["penMins"] = jEv["result"]["penaltyMinutes"]	
 
-			#
-			# If coordinates exist, translate coordinates to zones
-			#
+			if "coordinates" in jEv and len(jEv["coordinates"]) == 2:
+				newDict["locX"] = jEv["coordinates"]["x"]
+				newDict["locY"] = jEv["coordinates"]["y"]
 
-			# Determine whether the home team's defensive zone has x < 0 or x > 0
-			# Starting in 2014-2015, teams switch ends prior to the start of OT in the regular season
-			hDefZoneIsNegX = None
-			if newDict["period"] % 2 == 0:	# For even-numbered periods (2, 4, etc.), the home team's def. zone has x > 0
-				hDefZoneIsNegX = False
-			else:							# For even-numbered periods (1, 3, etc.), the home team's def. zone has x < 0
-				hDefZoneIsNegX = True
+				#
+				# If coordinates exist, translate coordinates to zones
+				#
 
-			# Exceptions
-			# For the Winter Classic on Jan 1, 2015, teams switched sides at the 10 minute mark of the first period
-			if seasonArg == 20142015 and gameId == 20556:
-				if newDict["period"] == 1 and newDict["time"] < 10 * 60:
-					hDefZoneIsNegX = True
-				elif newDict["period"] == 1 and newDict["time"] >= 10 * 60:
+				# Determine whether the home team's defensive zone has x < 0 or x > 0
+				# Starting in 2014-2015, teams switch ends prior to the start of OT in the regular season
+				hDefZoneIsNegX = None
+				if newDict["period"] % 2 == 0:	# For even-numbered periods (2, 4, etc.), the home team's def. zone has x > 0
 					hDefZoneIsNegX = False
+				else:							# For even-numbered periods (1, 3, etc.), the home team's def. zone has x < 0
+					hDefZoneIsNegX = True
 
-			# Store the event's zone from the home team's perspective
-			# Redlines are located at x = -25 and +25
-			if newDict["locX"] >= -25 and newDict["locX"] <= 25:
-				newDict["hZone"] = "n"
-			elif hDefZoneIsNegX == True:
-				if newDict["locX"] < -25:
-					newDict["hZone"] = "d"
-				elif newDict["locX"] > 25:
-					newDict["hZone"] = "o"
-			elif hDefZoneIsNegX == False:
-				if newDict["locX"] < -25:
-					newDict["hZone"] = "o"
-				elif newDict["locX"] > 25:
-					newDict["hZone"] = "d"
+				# Exceptions
+				# For the Winter Classic on Jan 1, 2015, teams switched sides at the 10 minute mark of the first period
+				if seasonArg == 20142015 and gameId == 20556:
+					if newDict["period"] == 1 and newDict["time"] < 10 * 60:
+						hDefZoneIsNegX = True
+					elif newDict["period"] == 1 and newDict["time"] >= 10 * 60:
+						hDefZoneIsNegX = False
 
-		# Record players and their roles
-		# Some corrections are required:
-		# 	For goals, the json simply lists "assist" for both assisters - enhance this to "assist1" and "assist2"
-		#	For giveaways and takeaways, the json uses role "PlayerID" - convert this to "giver" and "taker"
-		#	For "puck over glass" penalties, there seems to be a bug:
-		#		The json description in 2015020741 is: Braden Holtby Delaying Game - Puck over glass served by Alex Ovechkin
-		#		Holtby is given the playerType: "PenaltyOn", which is OK
-		#		However, Ovechkin is given the playerType: "DrewBy" -- we're going to correct this by giving him type "ServedBy"
-		#	For "too many men" penalties, there seems to be a bug:
-		#		The json description in 2015020741 is: Too many men/ice served by Sam Gagner
-		#		However, Gagner is the only player and is given the playerType: "PenaltyOn" -- we're going to correct this by giving him type "ServedBy"
+				# Store the event's zone from the home team's perspective
+				# Redlines are located at x = -25 and +25
+				if newDict["locX"] >= -25 and newDict["locX"] <= 25:
+					newDict["hZone"] = "n"
+				elif hDefZoneIsNegX == True:
+					if newDict["locX"] < -25:
+						newDict["hZone"] = "d"
+					elif newDict["locX"] > 25:
+						newDict["hZone"] = "o"
+				elif hDefZoneIsNegX == False:
+					if newDict["locX"] < -25:
+						newDict["hZone"] = "o"
+					elif newDict["locX"] > 25:
+						newDict["hZone"] = "d"
 
-		jRoles = dict()
-		for jP in jEv["players"]:
+			# Record players and their roles
+			# Some corrections are required:
+			# 	For goals, the json simply lists "assist" for both assisters - enhance this to "assist1" and "assist2"
+			#	For giveaways and takeaways, the json uses role "PlayerID" - convert this to "giver" and "taker"
+			#	For "puck over glass" penalties, there seems to be a bug:
+			#		The json description in 2015020741 is: Braden Holtby Delaying Game - Puck over glass served by Alex Ovechkin
+			#		Holtby is given the playerType: "PenaltyOn", which is OK
+			#		However, Ovechkin is given the playerType: "DrewBy" -- we're going to correct this by giving him type "ServedBy"
+			#	For "too many men" penalties, there seems to be a bug:
+			#		The json description in 2015020741 is: Too many men/ice served by Sam Gagner
+			#		However, Gagner is the only player and is given the playerType: "PenaltyOn" -- we're going to correct this by giving him type "ServedBy"
 
-			role = jP["playerType"].lower()
+			jRoles = dict()
+			for jP in jEv["players"]:
 
-			if newDict["type"] == "giveaway":
-				role = "giver"
-			elif newDict["type"] == "takeaway":
-				role = "taker"
-			elif newDict["type"] == "goal":
-				# Assume that in jEv["players"], the scorer is always listed first, the primary assister listed second, and secondary assister listed third
-				if role == "assist" and jP["player"]["id"] == jEv["players"][1]["player"]["id"]:
-					role = "assist1"
-				elif role == "assist" and jP["player"]["id"] == jEv["players"][2]["player"]["id"]:
-					role = "assist2"
+				role = jP["playerType"].lower()
 
-			jRoles[role] = jP["player"]["id"]
-		
-		if newDict["type"] == "penalty":
-			if newDict["subtype"].lower().find("puck over glass") >= 0:
-				if "servedby" not in jRoles and "drewby" in jRoles:
-					jRoles["servedby"] = jRoles["drewby"]
-					del jRoles["drewby"]
-			elif newDict["subtype"].lower().find("too many men") >= 0:
-				if "servedby" not in jRoles and "penaltyon" in jRoles:
-					jRoles["servedby"] = jRoles["penaltyon"]
-					del jRoles["penaltyon"]
+				if newDict["type"] == "giveaway":
+					role = "giver"
+				elif newDict["type"] == "takeaway":
+					role = "taker"
+				elif newDict["type"] == "goal":
+					# Assume that in jEv["players"], the scorer is always listed first, the primary assister listed second, and secondary assister listed third
+					if role == "assist" and jP["player"]["id"] == jEv["players"][1]["player"]["id"]:
+						role = "assist1"
+					elif role == "assist" and jP["player"]["id"] == jEv["players"][2]["player"]["id"]:
+						role = "assist2"
 
-		# If there's no roles - we don't want to create a 'roles' key in the event's output dictionary
-		if len(jRoles) > 0:
-			newDict["roles"] = jRoles
+				jRoles[role] = jP["player"]["id"]
+			
+			if newDict["type"] == "penalty":
+				if newDict["subtype"].lower().find("puck over glass") >= 0:
+					if "servedby" not in jRoles and "drewby" in jRoles:
+						jRoles["servedby"] = jRoles["drewby"]
+						del jRoles["drewby"]
+				elif newDict["subtype"].lower().find("too many men") >= 0:
+					if "servedby" not in jRoles and "penaltyon" in jRoles:
+						jRoles["servedby"] = jRoles["penaltyon"]
+						del jRoles["penaltyon"]
 
-		# Record event team and iceSit sfrom json - use the team abbreviation, not home/away
-		# For face-offs, the json's event team is the winner
-		# For blocked shots, the json's event team is the blocking team - we want to change this to the shooting team
-		# For penalties, the json's event team is the team who took the penalty
-		if "team" in jEv:
-			newDict["team"] = teamAbbrevs[jEv["team"]["name"].lower()]
-			if newDict["type"] == "blocked_shot":
+			# If there's no roles - we don't want to create a 'roles' key in the event's output dictionary
+			if len(jRoles) > 0:
+				newDict["roles"] = jRoles
+
+			# Record event team and iceSit sfrom json - use the team abbreviation, not home/away
+			# For face-offs, the json's event team is the winner
+			# For blocked shots, the json's event team is the blocking team - we want to change this to the shooting team
+			# For penalties, the json's event team is the team who took the penalty
+			if "team" in jEv:
+				newDict["team"] = teamAbbrevs[jEv["team"]["name"].lower()]
+				if newDict["type"] == "blocked_shot":
+					if newDict["team"] == outTeams["home"]["abbrev"]:
+						newDict["team"] = outTeams["away"]["abbrev"]
+					elif newDict["team"] == outTeams["away"]["abbrev"]:
+						newDict["team"] = outTeams["home"]["abbrev"]
+
 				if newDict["team"] == outTeams["home"]["abbrev"]:
-					newDict["team"] = outTeams["away"]["abbrev"]
+					newDict["iceSit"] = "home"
 				elif newDict["team"] == outTeams["away"]["abbrev"]:
-					newDict["team"] = outTeams["home"]["abbrev"]
+					newDict["iceSit"] = "away"
 
-			if newDict["team"] == outTeams["home"]["abbrev"]:
-				newDict["iceSit"] = "home"
-			elif newDict["team"] == outTeams["away"]["abbrev"]:
-				newDict["iceSit"] = "away"
+			# Record period types
+			if newDict["period"] not in periodTypes:
+				periodTypes[newDict["period"]] = newDict["periodType"] 
 
-		# Record period types
-		if newDict["period"] not in periodTypes:
-			periodTypes[newDict["period"]] = newDict["periodType"] 
-
-		# Record the home and away scores when the event occurred
-		# For goals, the json includes the goal itself in the score situation, but it's more accurate to say that the first goal was scored when it was 0-0
-		# Don't do this for shootout goals - the json doesn't increment the home and away scores for these
-		if newDict["type"] == "goal" and newDict["periodType"] != "shootout":
-			if newDict["team"] == outTeams["away"]["abbrev"]:
-				newDict["aScore"] = jEv["about"]["goals"]["away"] - 1
-				newDict["hScore"] = jEv["about"]["goals"]["home"]	
-			elif newDict["team"] == outTeams["home"]["abbrev"]:
+			# Record the home and away scores when the event occurred
+			# For goals, the json includes the goal itself in the score situation, but it's more accurate to say that the first goal was scored when it was 0-0
+			# Don't do this for shootout goals - the json doesn't increment the home and away scores for these
+			if newDict["type"] == "goal" and newDict["periodType"] != "shootout":
+				if newDict["team"] == outTeams["away"]["abbrev"]:
+					newDict["aScore"] = jEv["about"]["goals"]["away"] - 1
+					newDict["hScore"] = jEv["about"]["goals"]["home"]	
+				elif newDict["team"] == outTeams["home"]["abbrev"]:
+					newDict["aScore"] = jEv["about"]["goals"]["away"]
+					newDict["hScore"] = jEv["about"]["goals"]["home"] - 1	
+			else:
 				newDict["aScore"] = jEv["about"]["goals"]["away"]
-				newDict["hScore"] = jEv["about"]["goals"]["home"] - 1	
-		else:
-			newDict["aScore"] = jEv["about"]["goals"]["away"]
-			newDict["hScore"] = jEv["about"]["goals"]["home"]
+				newDict["hScore"] = jEv["about"]["goals"]["home"]
 
-		#
-		# Add event to event list
-		#
+			#
+			# Add event to event list
+			#
 
-		outEvents.append(copy.deepcopy(newDict))
+			outEvents.append(copy.deepcopy(newDict))
+
+	elif useFallback == True:	# If using the fallback pbp, less processing is needed
+
+		for fEv in events:
+
+			# Record period types
+			if fEv["period"] not in periodTypes:
+				periodTypes[fEv["period"]] = fEv["periodType"] 
+
+			outEvents.append(copy.deepcopy(fEv))
 
 	#
-	# Done looping through json events, so clear the original dictionary
+	# Done processing json/fallback events, so clear the original dictionary
 	#
 
 	del events
@@ -713,7 +747,6 @@ for gameId in gameIds:
 			# Case 2: Non face-off events
 			#	Attribute all other events to players who in the middle of their shift (onIce) and players ending their shift (onIceEnding)
 			#	With this approach, we're saying that the players who are ending their shift at time t had more to do with the event at time t than those starting their shift at time t
-			#	This is somewhat inaccurate for penalty shots - the html pbp will only list the shooter and goalie, but since we aren't counting penalty shots as corsis, we won't worry about this
 			# Example 1: Penalty shots will have 3 pbp entries:
 			#	1. The penalty - case 2 handles this
 			#	2. The penalty shot - case 2 handles this
@@ -1289,7 +1322,7 @@ for gameId in gameIds:
 		outString += "," + str(pId)
 		outString += "," + outPlayers[pId]["firstName"]
 		outString += "," + outPlayers[pId]["lastName"]
-		outString += "," + outPlayers[pId]["jersey"]
+		outString += "," + str(outPlayers[pId]["jersey"])
 		outString += "," + outPlayers[pId]["position"]
 
 		outString += "\n"
@@ -1302,6 +1335,8 @@ for gameId in gameIds:
 	# Load csv files into database
 	#
 	#
+
+	sys.exit()
 
 	print "- - - - -"
 	print "Loading csv files into database"
