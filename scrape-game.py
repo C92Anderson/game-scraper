@@ -814,8 +814,13 @@ for gameId in gameIds:
 			# There may be cases where the player got a shot off before the penalty call, which might produce 2 shots at the same timepoint: the original shot, and the penalty shot
 			matchingShotEvs = []
 			for ev1 in outEvents:
-				if ev1["type"] in ["goal", "shot", "missed_shot"] and ev1["period"] == ev["period"] and ev1["time"] == ev["time"]:
-					matchingShotEvs.append(ev1)
+				if ev1["type"] in ["goal", "shot", "missed_shot"]:
+					if ev1["period"] == ev["period"] and ev1["time"] == ev["time"]:
+						matchingShotEvs.append(ev1)
+					elif seasonArg == 20152016 and gameId == 20962:
+						# For this game, the penalty occurred at 13:12, but the penalty shot occurred at 13:15
+						if ev1["period"] == ev["period"] and ev["time"] == toSecs("13:12") and ev1["time"] == toSecs("13:15"):
+							matchingShotEvs.append(ev1)
 
 			# Since the order of outEvents is preserved, if there's multiple matching shots, identify the last shot as the penalty shot
 			shotEv = matchingShotEvs[len(matchingShotEvs) - 1]
