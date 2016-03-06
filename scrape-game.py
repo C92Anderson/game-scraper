@@ -1130,7 +1130,7 @@ for gameId in gameIds:
 		outString += "," + nestedShifts[sh["playerId"]]["team"]
 		outString += "," + nestedShifts[sh["playerId"]]["iceSit"]
 		outString += "," + str(sh["playerId"])
-		outString += "," + nestedShifts[pId]["position"]
+		outString += "," + nestedShifts[sh["playerId"]]["position"]
 		outString += "," + str(sh["period"])
 		outString += "," + periodTypes[sh["period"]]
 		outString += "," + str(toSecs(sh["startTime"]))
