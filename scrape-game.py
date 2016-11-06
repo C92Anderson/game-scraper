@@ -5,6 +5,7 @@ import os.path
 import json
 import copy
 import re
+import unicodedata
 from pprint import pprint
 
 # For loading csv files into database
@@ -25,6 +26,12 @@ def outputVal(d, k):
 		return "NULL"
 	else:
 		return str(d[k])
+
+# Remove accents, like for Montreal Canadiens
+def remove_accents(input_str):
+    nfkd_form = unicodedata.normalize("NFKD", input_str)
+    only_ascii = nfkd_form.encode("ASCII", "ignore")
+    return only_ascii
 
 #
 # 
@@ -144,6 +151,8 @@ for gameId in gameIds:
 	# Input file urls
 	shiftJsonUrl = "http://www.nhl.com/stats/rest/shiftcharts?cayenneExp=gameId=" + str(shortSeasonArg) + "0" + str(gameId)
 	pbpJsonUrl = "https://statsapi.web.nhl.com/api/v1/game/" + str(shortSeasonArg) + "0" + str(gameId) + "/feed/live"
+	print "Shift JSON: " + shiftJsonUrl
+	print "PBP JSON: " + pbpJsonUrl
 
 	# Downloaded input file names
 	shiftJson = str(seasonArg) + "-" + str(gameId) + "-shifts.json"
@@ -346,22 +355,23 @@ for gameId in gameIds:
 			#		However, Gagner is the only player and is given the playerType: "PenaltyOn" -- we're going to correct this by giving him type "ServedBy"
 
 			jRoles = dict()
-			for jP in jEv["players"]:
+			if "players" in jEv:
+				for jP in jEv["players"]:
 
-				role = jP["playerType"].lower()
+					role = jP["playerType"].lower()
 
-				if newDict["type"] == "giveaway":
-					role = "giver"
-				elif newDict["type"] == "takeaway":
-					role = "taker"
-				elif newDict["type"] == "goal":
-					# Assume that in jEv["players"], the scorer is always listed first, the primary assister listed second, and secondary assister listed third
-					if role == "assist" and jP["player"]["id"] == jEv["players"][1]["player"]["id"]:
-						role = "assist1"
-					elif role == "assist" and jP["player"]["id"] == jEv["players"][2]["player"]["id"]:
-						role = "assist2"
+					if newDict["type"] == "giveaway":
+						role = "giver"
+					elif newDict["type"] == "takeaway":
+						role = "taker"
+					elif newDict["type"] == "goal":
+						# Assume that in jEv["players"], the scorer is always listed first, the primary assister listed second, and secondary assister listed third
+						if role == "assist" and jP["player"]["id"] == jEv["players"][1]["player"]["id"]:
+							role = "assist1"
+						elif role == "assist" and jP["player"]["id"] == jEv["players"][2]["player"]["id"]:
+							role = "assist2"
 
-				jRoles[role] = jP["player"]["id"]
+					jRoles[role] = jP["player"]["id"]
 			
 			if newDict["type"] == "penalty":
 				if newDict["subtype"].lower().find("puck over glass") >= 0:
@@ -386,7 +396,7 @@ for gameId in gameIds:
 			# For blocked shots, the json's event team is the blocking team - we want to change this to the shooting team
 			# For penalties, the json's event team is the team who took the penalty
 			if "team" in jEv:
-				newDict["team"] = teamAbbrevs[jEv["team"]["name"].lower()]
+				newDict["team"] = teamAbbrevs[remove_accents(jEv["team"]["name"]).lower()]
 				if newDict["type"] == "blocked_shot":
 					if newDict["team"] == outTeams["home"]["abbrev"]:
 						newDict["team"] = outTeams["away"]["abbrev"]
@@ -896,6 +906,7 @@ for gameId in gameIds:
 			
 			teamStrengthSits = dict()	# Returns the strength situation from the key-team's perspective
 
+			pprint(ev)
 			if ev["type"] in ["shot", "missed_shot", "goal"] and ev["description"].find("-- penalty shot") >= 0:
 				# Always count penalty shots in the "other" strength situation
 				teamStrengthSits[aAbbrev] = "other"
