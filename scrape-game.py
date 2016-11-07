@@ -906,7 +906,6 @@ for gameId in gameIds:
 			
 			teamStrengthSits = dict()	# Returns the strength situation from the key-team's perspective
 
-			pprint(ev)
 			if ev["type"] in ["shot", "missed_shot", "goal"] and ev["description"].find("-- penalty shot") >= 0:
 				# Always count penalty shots in the "other" strength situation
 				teamStrengthSits[aAbbrev] = "other"
