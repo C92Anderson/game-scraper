@@ -906,7 +906,11 @@ for gameId in gameIds:
 			
 			teamStrengthSits = dict()	# Returns the strength situation from the key-team's perspective
 
-			if ev["type"] in ["shot", "missed_shot", "goal"] and ev["description"].find("-- penalty shot") >= 0:
+			if "aSkaterCount" not in ev or "hSkaterCount" not in ev or ev["aSkaterCount"] == 0 or ev["hSkaterCount"] == 0:
+				# Handle bugs where no skaters are recorded for either team
+				teamStrengthSits[aAbbrev] = "other"
+				teamStrengthSits[hAbbrev] = "other"				
+			elif ev["type"] in ["shot", "missed_shot", "goal"] and ev["description"].find("-- penalty shot") >= 0:
 				# Always count penalty shots in the "other" strength situation
 				teamStrengthSits[aAbbrev] = "other"
 				teamStrengthSits[hAbbrev] = "other"
